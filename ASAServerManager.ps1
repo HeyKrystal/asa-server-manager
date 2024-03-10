@@ -164,7 +164,7 @@ function startServer {
     $activeMapIds = getActiveMapIds
     for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
         Write-Host "Loading map id $($activeMapIds[$i])."
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?QueryPort=$($portPool[$i].queryPort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"-mods=$($modIds)`" $($properties.AdditionalCMDFlags)"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?QueryPort=$($portPool[$i].queryPort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) -mods=$($modIds) $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         Invoke-Expression $commandLine
         timeout /t 60 /nobreak
