@@ -94,6 +94,7 @@ function main {
         Write-Host "Properties loaded:"
         Write-Host "SessionHeader: $([string]$properties.SessionHeader)"
         Write-Host "ActiveMapIDs: $([string]$properties.ActiveMapIDs)"
+        Write-Host "ActiveEventID: $([string]$properties.ActiveEventID)"
         Write-Host "AdditionalCMDFlags: $([string]$properties.AdditionalCMDFlags)"
         Write-Host "BackupPath: $([string]$properties.BackupPath)"
         Write-Host "ForceRespawnChance: $([int]([decimal]$properties.ForceRespawnChance * 100))%"
@@ -378,13 +379,13 @@ function getActiveModIds {
     $activeModsLine = Get-Content -Path "ASAServers\ShooterGame\Saved\Config\WindowsServer\GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
 
     #Testing adding events here,
-    $activeEventModId = "927084"
-    $activeModsLine = "$($activeModsLine),$($activeEventModId)"
+    #$activeEventModId = "927084"
+    $activeModsLine = "$($activeModsLine)"
 
 
     $activeMods = $activeModsLine -split "="
 
-    return $activeMods[1]
+    return "$($properties.ActiveEventID),$($activeMods[1])"
 }
 
 # Get active maps from server properties.
