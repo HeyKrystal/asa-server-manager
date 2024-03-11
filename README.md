@@ -11,7 +11,7 @@ The primary goal in developing this script was to make an ark management tool th
 - [x] Starts, Stops, & Restarts
 - [x] Crash Detection & Auto Restart
 - [x] Server Logging
-- [x] Queued .ini Settings
+- [x] Queuedable .ini Settings
 - [ ] Tells you its proud of you
 
 ## Setup
