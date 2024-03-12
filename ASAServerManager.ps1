@@ -61,6 +61,7 @@ $events = {
 	"927090" # Winter Wonderland
 	"927084" # Love Evolved
 }
+Write-Host "Known events: $($events)"
 
 function main {
     # Start logging stdout and stderr to file unless crash detect.
