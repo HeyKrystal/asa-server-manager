@@ -66,7 +66,8 @@ I recommended scheduling these commands with Windows Task Scheduler so that they
    - For "Add arguments" add ```-File "ASAServerManager.ps1" -serverop restart```
    - For "Start in" add the path to your server directory.
 6. Click Ok and you should be all set.
-   Optional: You can make a crash detection entry similarly. Just set the trigger to repeat every 30 seconds or so and set the action arguements to ```-File "ASAServerManager.ps1" -serverop crashdetect```.
+
+Optional: You can make a crash detection entry similarly. Just set the trigger to repeat every 30 seconds or so and set the action arguements to ```-File "ASAServerManager.ps1" -serverop crashdetect```.
 
 ## Issues
 As mentioned above, this is primarily a personal project. If there are obviously valid problems I will address them [here](https://github.com/HeyKrystal/asa-server-manager/issues/new). However, requests that border enhancements or conveniences will be ignored.
