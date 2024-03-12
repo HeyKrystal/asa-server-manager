@@ -8,11 +8,11 @@
     .PARAMETER serverop
     Specifies the server operation you would like to perform.
         - restart: Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat. Server starts back up immediately after.
-        - shutdown: Kicks off a 1 hours delayed shutdown sequence that includes warnings in server chat.
-        - backup: Compresses the server's "Saved" folder and copies is to the backup patch specified in the ASAServer.properties file.
-        - update: Runs steamcmd and updated the server application.
+        - shutdown: Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat.
+        - backup: Compresses the server's "Saved" folder and copies it to the backup patch specified in the ASAServer.properties file.
+        - update: Runs steamcmd and updates the server application.
         - setup: Should only be used on initial script usage. Sets up project structure, downloads required tools, and downloads the server application.
-        - crashdetect: This should be scheduled to run periodically. Checks if the ark server is running and restarts it if it is not.
+        - crashdetect: This should be scheduled to run periodically; every 30 seconds is effective. It checks if the ark server is running and restarts it if it is not.
 
     .PARAMETER now
     This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on -serverop shutdown or -serverop restart.
