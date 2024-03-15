@@ -20,14 +20,13 @@ The primary goal in developing this script was to make an ark management tool fo
 
 ## Setup
 1. Create a folder where you would like install the server.
-3. Copy the ASAServerManager.ps1 script into the folder that folder.
-4. Using PowerShell, navigate to the directory containing the script, execute the following, then wait for it to finish.
-```
-$ ./ASAServerManager.ps1 -serverop setup
-```
-6. Edit the ```ASAServer.properties``` file with your preferred configurations.
-7. Edit the ```Game_Queued.ini``` and ```GameUserSetting_Queued.ini``` with preferred server configurations.
-8. Continue on to [Usage](README.md#usage)
+2. Copy the ASAServerManager.ps1 script into the folder that folder.
+3. Right click ASAServerManager.ps1 and select ```Run with PowerShell```
+4. Type ```setup``` when prompted for a serverop.
+5. Wait for the setup process to finish and close out; following any directions it gives.
+5. Edit the ```ASAServer.properties``` file with your preferred configurations.
+6. Edit the ```Game_Queued.ini``` and ```GameUserSetting_Queued.ini``` with preferred server configurations. This is where you will put any and all ini configurations for your server. They will automatically be copied into the server install on restat.
+7. Continue on to [Usage](README.md#usage)
 
 ## Usage
 ### Parameters

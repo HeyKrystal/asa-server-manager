@@ -70,7 +70,7 @@ function main {
     else { Start-Transcript -Path "./Logs/ASAServerManager.log" -Append }
 
     # Exit script if lockfile exists, otherwise create one.
-    if (Test-Path -Path "ASA.lock") {
+    if (Test-Path -Path "./ASA.lock") {
         Write-Host "Execution blocked by ASA.lock file. An ASA script is already running."
         Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file and try again."
         timeout /t 10
@@ -82,11 +82,11 @@ function main {
     }
 
     # Exit script if properties file doesnt exist.
-    if (!(Test-Path -Path "ASAServer.properties") -AND !($serverop -eq 'setup')) {
+    if (!(Test-Path -Path "./ASAServer.properties") -AND !($serverop -eq 'setup')) {
         Write-Host "Unable to find ASAServer.properties; run script with `"setup`" argument."
         timeout /t 10
         $serverop = ""
-    } elseif (Test-Path -Path "ASAServer.properties") {
+    } elseif (Test-Path -Path "./ASAServer.properties") {
         # Load properties file.
         $propertiesContent = Get-Content ".\ASAServer.properties" -raw
         $propertiesContentEscaped = $propertiesContent -replace '\\', '\\'
@@ -120,7 +120,7 @@ function main {
 
     # Wrap up and delete lockfile.
     Write-Host "Exiting ASAServerManager script and removing lock file."
-    Remove-Item -Path "ASA.lock"
+    Remove-Item -Path "./ASA.lock"
     
     # Stop logging to file
     Stop-Transcript
@@ -145,8 +145,8 @@ function startServer {
     if (isServerRunning) { return }
 
     # Replace ini files with backups.
-    Copy-Item -Path "ASAServers\ShooterGame\Saved\Config\WindowsServer\Game_Queued.ini" -Destination "ASAServers\ShooterGame\Saved\Config\WindowsServer\Game.ini" -Force
-    Copy-Item -Path "ASAServers\ShooterGame\Saved\Config\WindowsServer\GameUserSettings_Queued.ini" -Destination "ASAServers\ShooterGame\Saved\Config\WindowsServer\GameUserSettings.ini" -Force
+    Copy-Item -Path "./Game_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
+    Copy-Item -Path "./GameUserSettings_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
 
     # Determine additional parameters.
     $respawnDinoArgument = ""
@@ -277,7 +277,7 @@ function backupServer {
     if (Test-Path -Path "C:\Program Files\WinRAR\Rar.exe") {
         & "C:\Program Files\WinRAR\Rar.exe" a "$([string]$properties.BackupPath)\$archiveName.rar" "ASAServers\ShooterGame\Saved"
     } else {
-        Compress-Archive -Path "ASAServers\ShooterGame\Saved" -DestinationPath "$([string]$properties.BackupPath)\$archiveName.zip" -CompressionLevel Optimal
+        Compress-Archive -Path "./ASAServers/ShooterGame/Saved" -DestinationPath "./$([string]$properties.BackupPath)/$archiveName.zip" -CompressionLevel Optimal
     }
 }
 
@@ -297,39 +297,47 @@ function crashDetect {
 function setup {
     # Setup project structure.
     Write-Host "Setting up project structure."
-    New-Item -Path "ASAServers" -ItemType Directory
-    New-Item -Path "Backups" -ItemType Directory
-    New-Item -Path "RCON" -ItemType Directory
-    New-Item -Path "SteamCMD" -ItemType Directory
+    New-Item -Path "./ASAServers" -ItemType Directory
+    New-Item -Path "./Backups" -ItemType Directory
+    New-Item -Path "./RCON" -ItemType Directory
+    New-Item -Path "./SteamCMD" -ItemType Directory
 
     # Create properties file with initial values.
     $initialPropertiesValues = "" +
-    "# Determines which map the server will host. (In future, comma delimited will allow clusters.)`n" +
+    "# Server will show up in the list with this value, followed by a hyphen and the map label. (e.g. `"My Cool Cluster - The Island`")`n" +
+    "SessionHeader=My Cool Cluster`n" +
+    "# Determines which map the server will host. Comma delimit for clusters. Duplicates won't work.`n" +
     "ActiveMapIDs=TheIsland_WP`n" +
+    "# Put event mod id to activate an event, otherwise leave blank.`n" +
+    "ActiveEventID=`n" +
+    "# Include additional command line flags you would like here space-separated. (e.g. `"-PassiveMods=927090 -NoTransferFromFiltering -NoBattlEye`")`n" +
+    "AdditionalCMDFlags=-NoTransferFromFiltering -NoBattlEye`n" +
+    "# If using clusters populate this with a unique Id, otherwise leave blank. (e.g. `"MyCoolCluster123456789`")`n" +
+    "ClusterId=MyCoolCluster123456789`n" +
     "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
-    "BackupPath=./Backups`n" +
+    "BackupPath=`n" +
     "# Chance that wild dinos will force respawn when using the -RollForceRespawnDinos argument. (0.25 = 25%, 0.75 = 75%, etc.)`n" +
-    "ForceRespawnChance=0.25`n" +
-    "# Sets the maximum concurrent players in your server.`n" +
+    "ForceRespawnChance=1.0`n" +
+    "# Sets the maximum concurrent players in your server.`")`n" +
     "MaxPlayers=20`n" +
-    "# Copy the admin password you've set in GameUserSettings.ini here. (This allows the tool broadcast, save, and shutdown.)`n" +
-    "AdminPassword=password123`n"
-    New-Item -Path "ASAServer.properties" -ItemType File -Value $initialPropertiesValues
+    "# Copy the admin password you've set in GameUserSettings.ini here. (This tool will not function properly without this.)`")`n" +
+    "AdminPassword=`n"
+    New-Item -Path "./ASAServer.properties" -ItemType File -Value $initialPropertiesValues
     
     # Download the utilities used by the script.
     Write-Host "Downloading & unpacking utilities used by the script."
     Invoke-WebRequest -Uri "https://github.com/gorcon/rcon-cli/releases/download/v0.10.3/rcon-0.10.3-win64.zip" -Outfile RCON.zip
-    Expand-Archive -Path "RCON.zip" -DestinationPath "./RCON/"
+    Expand-Archive -Path "./RCON.zip" -DestinationPath "./RCON/"
     Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -Outfile SteamCMD.zip
-    Expand-Archive -Path "SteamCMD.zip" -DestinationPath "./SteamCMD/"
+    Expand-Archive -Path "./SteamCMD.zip" -DestinationPath "./SteamCMD/"
     
     # Relocate rcon-cli for easier access.
     Move-Item -Path "./RCON/rcon-0.10.3-win64/*" -Destination "./RCON"
     
     # Cleanup.
     Write-Host "Cleaning up."
-    Remove-Item -Path "RCON.zip"
-    Remove-Item -Path "SteamCMD.zip"
+    Remove-Item -Path "./RCON.zip"
+    Remove-Item -Path "./SteamCMD.zip"
     Remove-Item -Path "./RCON/rcon-0.10.3-win64" -Recurse
     
     #Update steamcmd..
@@ -340,24 +348,28 @@ function setup {
     updateServer
 
     # Next steps.
-    New-Item -Path "ASAServers/ShooterGame/Saved/Config/WindowsServer" -ItemType Directory
+    New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer" -ItemType Directory
     Write-Host "`nSetup complete, check out the ASAServer.properties for important settings before starting the server."
-    Write-Host "Also if you have GameUserSetting.ini and Game.ini you are planning on using, right now(before pressing enter) would be a great time"
-    Write-Host "to copy them into the `"./ASAServers/ShooterGame/Saved/Config/WindowsServer folder`"."
+    Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the `"./ASAServers/ShooterGame/Saved/Config/WindowsServer`" folder."
     Pause
 
     # Create queued versions of ini files for easier configuration updates.
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game_Queued.ini")) {
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
         Write-Host "Creating queues version of Game.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game_Queued.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game_Queued.ini")) {
-        Write-Host "Creating regular and queues versions of Game.ini"
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game_Queued.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
+        Write-Host "Creating regular and queued versions of Game.ini"
         New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" | Out-Null
-        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game_Queued.ini" | Out-Null
+        New-Item -Name "./Game_Queued.ini" | Out-Null
     }
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini")  -AND !(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSetting_Queued.ini")) {
-        Write-Host "Creating queues version of GameUserSetting.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSetting_Queued.ini"
+
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+        Write-Host "Creating queues version of GameUserSettings.ini"
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings_Queued.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+        Write-Host "Creating regular and queued versions of GameUserSettings.ini"
+        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Out-Null
+        New-Item -Name "./GameUserSettings_Queued.ini" | Out-Null
     }
 }
 
@@ -378,7 +390,7 @@ function isServerRunning {
 # Get active mods from GameUserSettings.ini
 function getActiveModIds {
     # Read ini file to get ActiveMods
-    $activeModsLine = Get-Content -Path "ASAServers\ShooterGame\Saved\Config\WindowsServer\GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
+    $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
 
     #Testing adding events here,
     #$activeEventModId = "927084"
