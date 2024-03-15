@@ -60,7 +60,7 @@ $maps = @{
 $events = {
     "927083" # Turkey Trial
 	"927090" # Winter Wonderland
-	"927084" # Love Evolved
+	"927084" # Love Ascended
 }
 Write-Host "Known events: $($events)"
 
@@ -159,14 +159,18 @@ function startServer {
             Write-Host "Dinos will be force respawed."
         }
     }
+
     $modIds = getActiveModIds
+    if (!$modIds -eq "") {
+        $modIds = "-mods=$($modIds)"
+    }
 
     # Start up all maps with a few minutes of stagger inbetween.
     Write-Host "Starting up server."
     $activeMapIds = getActiveMapIds
     for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
         Write-Host "Loading map id $($activeMapIds[$i])."
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?QueryPort=$($portPool[$i].queryPort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) -mods=$($modIds) $($properties.AdditionalCMDFlags)"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?QueryPort=$($portPool[$i].queryPort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) $($modIds) $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         Invoke-Expression $commandLine
         timeout /t 60 /nobreak
@@ -277,7 +281,7 @@ function backupServer {
     if (Test-Path -Path "C:\Program Files\WinRAR\Rar.exe") {
         & "C:\Program Files\WinRAR\Rar.exe" a "$([string]$properties.BackupPath)\$archiveName.rar" "ASAServers\ShooterGame\Saved"
     } else {
-        Compress-Archive -Path "./ASAServers/ShooterGame/Saved" -DestinationPath "./$([string]$properties.BackupPath)/$archiveName.zip" -CompressionLevel Optimal
+        Compress-Archive -Path "ASAServers\ShooterGame\Saved" -DestinationPath "$([string]$properties.BackupPath)\$archiveName.zip" -CompressionLevel Optimal
     }
 }
 
@@ -315,7 +319,7 @@ function setup {
     "# If using clusters populate this with a unique Id, otherwise leave blank. (e.g. `"MyCoolCluster123456789`")`n" +
     "ClusterId=MyCoolCluster123456789`n" +
     "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
-    "BackupPath=`n" +
+    "BackupPath=./Backups`n" +
     "# Chance that wild dinos will force respawn when using the -RollForceRespawnDinos argument. (0.25 = 25%, 0.75 = 75%, etc.)`n" +
     "ForceRespawnChance=1.0`n" +
     "# Sets the maximum concurrent players in your server.`")`n" +
@@ -391,15 +395,17 @@ function isServerRunning {
 function getActiveModIds {
     # Read ini file to get ActiveMods
     $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
+    $activeModsArray = $activeModsLine -split "="
+    
+    if ($properties.ActiveEventID -eq "") {
+        $activeModIds = "$($activeModsArray[1])"
+    } else {
+        $activeModIds = "$($properties.ActiveEventID),$($activeModsArray[1])"
+    }
 
-    #Testing adding events here,
-    #$activeEventModId = "927084"
-    $activeModsLine = "$($activeModsLine)"
+    Write-Host "Active mod ids: $($activeModIds)"
 
-
-    $activeMods = $activeModsLine -split "="
-
-    return "$($properties.ActiveEventID),$($activeMods[1])"
+    return $activeModIds
 }
 
 # Get active maps from server properties.
