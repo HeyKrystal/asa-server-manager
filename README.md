@@ -25,7 +25,7 @@ The primary goal in developing this script was to make an ark management tool fo
 4. Type ```setup``` when prompted for a serverop.
 5. Wait for the setup process to finish and close out; following any directions it gives.
 5. Edit the ```ASAServer.properties``` file with your preferred configurations.
-6. Edit the ```Game_Queued.ini``` and ```GameUserSetting_Queued.ini``` with preferred server configurations. This is where you will put any and all ini configurations for your server. They will automatically be copied into the server install on restat.
+6. Edit the ```Game_Queued.ini``` and ```GameUserSetting_Queued.ini``` with preferred server configurations. This is where you will put any and all .ini configurations for your server. They will automatically be copied into the server install on restat.
 7. Continue on to [Usage](README.md#usage)
 
 ## Usage
