@@ -1,8 +1,11 @@
 # Ark Survival Ascended Server Manager 🦖
-The primary goal in developing this script was to make an ark management tool that embodied "set it and forget it". This tool provides several functions for starting and maintaining an Ark Survival Ascended server that, when paired with Windows Task Scheduler, provides a very low maintenance and unobtrusive experience.
+The primary goal in developing this script was to make an ark management tool for automation enthusiasts that embodied "set it and forget it". This tool provides functions for starting and maintaining an Ark Survival Ascended server that, when paired with Windows Task Scheduler, provides a very low maintenance and unobtrusive experience.
 
 > [!Note]
-> I am unfortunately not providing direct support for this project. This is first and foremost for my own server management. It's shared here because I recognize its usefulness and educational value, and I hope it will help people who were in the same boat as me when I started on this quest for ASA server management.
+> I am unfortunately not providing direct support for this project. This is first and foremost for my own server management. It's shared here because I recognize its usefulness and educational value, and I hope it will help people who were in the same boat as me when I started on this quest for automated ASA server management.
+
+> [!WARNING]
+> The use of this tool assumes a basic understanding of ASA server hosting. This guide doesn't cover port forwarding, ini configuration, firewalls, etc. Check out the Ark Wiki's [Dedicated server setup](https://ark.wiki.gg/wiki/Dedicated_server_setup) for information on that.
 
 ## Features
 - [x] Server Setup
@@ -10,8 +13,9 @@ The primary goal in developing this script was to make an ark management tool th
 - [x] Compressed Backups
 - [x] Starts, Stops, & Restarts
 - [x] Crash Detection & Auto Restart
-- [x] Server Logging
+- [x] Script Activity Logging
 - [x] Queueable .ini Settings
+- [x] Clustered Servers
 - [ ] Tells you its proud of you
 
 ## Setup
@@ -67,10 +71,11 @@ I recommended scheduling these commands with Windows Task Scheduler so that they
    - For "Start in" add the path to your server directory.
 6. Click Ok and you should be all set.
 
-Optional: You can make a crash detection entry similarly. Just set the trigger to repeat every 30 seconds or so and set the action arguements to ```-File "ASAServerManager.ps1" -serverop crashdetect```.
+> [!TIP]
+> You can make a crash detection entry similarly. Just set the trigger to repeat every 30 seconds or so and set the action arguements to ```-File "ASAServerManager.ps1" -serverop crashdetect```.
 
 ## Issues
 As mentioned above, this is primarily a personal project. If there are obviously valid problems I will address them [here](https://github.com/HeyKrystal/asa-server-manager/issues/new). However, requests that border enhancements or conveniences will be ignored.
 
 ## Contribution
-If you have ideas please feel free to just copy the script and build on top of it.
+I'm not super familiar with GitHub's collaboration features. I'll try to be accomodating where it makes sense though. If you're wanting to make edits for your own personal use feel free to fork the project and do whatyever you'd like to it. 😊
