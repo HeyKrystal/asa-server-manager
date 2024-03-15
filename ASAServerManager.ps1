@@ -53,6 +53,7 @@ $portPool = @(
 $maps = @{
     TheIsland_WP=[Map]@{apiName="TheIsland_WP";label="The Island"}
     Svartalfheim_WP=[Map]@{apiName="Svartalfheim_WP";label="Svartalfheim(Test)"}
+    Nyrandil=[Map]@{apiName="Nyrandil";label="Nyrandil(Test)"}
 }
 
 # These are the mod ids for events.
