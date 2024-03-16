@@ -21,7 +21,7 @@
     This flag will pick a random event from the $events list.
 
     .PARAMETER rollforcerespawndinos
-    This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The weight for this chance can be specified in the ASAServerProperties file. This flag will only be triggered on -serverop restart.
+    This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The value represents the percentage chance a forced respawn will occur and must be a value of 0-100. This flag will only be triggered on -serverop restart.
 #>
 param (
     # The server operation to perform.
@@ -29,9 +29,11 @@ param (
     [ValidateSet("restart", "shutdown", "backup", "update", "setup", "crashdetect")]
     [string]$serverop,
 
-    # Rolls for -ForceRespawnDinos on restart.
+    # Rolls for -ForceRespawnDinos on restart using provided percentage.
     [Parameter()]
-    [switch]$rollforcerespawndinos = $false,
+    [ValidateRange(0,100)]
+    [int]$rollforcerespawndinos,
+
     # Skips the 1 hour countdown on shutdown/restart.
     [Parameter()]
     [switch]$now = $false
@@ -40,35 +42,48 @@ param (
 # This is a port pool for clustering. (These 8 sets are the most I've ever been able to port forward in Evolved.)
 # All ports used for copy into router config: 7777,7778,7779,7780,7781,7782,7783,7784,7785,7786,7787,7788,7789,7790,7791,7792,27015,27016,27017,27018,27019,27020,27051,27052
 $portPool = @(
-    [PortSet]@{ instancePort="7777";rawPort="7778";queryPort="27015";rconPort="32330" }
-    [PortSet]@{ instancePort="7779";rawPort="7780";queryPort="27016";rconPort="32332" }
-    [PortSet]@{ instancePort="7781";rawPort="7782";queryPort="27017";rconPort="32334" }
-    [PortSet]@{ instancePort="7783";rawPort="7784";queryPort="27018";rconPort="32336" }
-    [PortSet]@{ instancePort="7785";rawPort="7786";queryPort="27019";rconPort="32338" }
-    [PortSet]@{ instancePort="7787";rawPort="7788";queryPort="27020";rconPort="32340" }
-    [PortSet]@{ instancePort="7789";rawPort="7790";queryPort="27051";rconPort="32342" }
-    [PortSet]@{ instancePort="7791";rawPort="7792";queryPort="27052";rconPort="32344" }
+    [PortSet]@{ instancePort="7777"; rawPort="7778"; queryPort="27015"; rconPort="32330" }
+    [PortSet]@{ instancePort="7779"; rawPort="7780"; queryPort="27016"; rconPort="32332" }
+    [PortSet]@{ instancePort="7781"; rawPort="7782"; queryPort="27017"; rconPort="32334" }
+    [PortSet]@{ instancePort="7783"; rawPort="7784"; queryPort="27018"; rconPort="32336" }
+    [PortSet]@{ instancePort="7785"; rawPort="7786"; queryPort="27019"; rconPort="32338" }
+    [PortSet]@{ instancePort="7787"; rawPort="7788"; queryPort="27020"; rconPort="32340" }
+    [PortSet]@{ instancePort="7789"; rawPort="7790"; queryPort="27051"; rconPort="32342" }
+    [PortSet]@{ instancePort="7791"; rawPort="7792"; queryPort="27052"; rconPort="32344" }
 )
 
-# This exists for when clustering becomes available.
+# Used for dynamically labeling servers.
+Class ASAMap {
+    [String]$apiName
+    [string]$mapLabel
+}
 $maps = @{
-    TheIsland_WP=[Map]@{apiName="TheIsland_WP";label="The Island"}
-    Svartalfheim_WP=[Map]@{apiName="Svartalfheim_WP";label="Svartalfheim(Test)"}
-    Nyrandil=[Map]@{apiName="Nyrandil";label="Nyrandil(Test)"}
+    TheIsland_WP=[ASAMap]@{ apiName="TheIsland_WP"; mapLabel="The Island" }
+    Svartalfheim_WP=[ASAMap]@{ apiName="Svartalfheim_WP"; mapLabel="Svartalfheim(Test)" }
+    Nyrandil=[ASAMap]@{ apiName="Nyrandil"; mapLabel="Nyrandil(Test)" }
 }
 
 # These are the mod ids for events.
-$events = {
-    "927083", # Turkey Trial
-	"927090", # Winter Wonderland
-	"927084" # Love Ascended
+Class ASAEvent {
+    [String]$modId
+    [String]$eventLabel
 }
-Write-Host "Known events: $($events)"
+$events = @(
+    [ASAEvent]@{ modId="927083"; eventLabel="Turkey Trial" }
+	[ASAEvent]@{ modId="927090"; eventLabel="Winter Wonderland" }
+	[ASAEvent]@{ modId="927084"; eventLabel="Love Ascended" }
+)
 
 function main {
+    # Script launched
+    Write-Host "======= Script Launched ======="
+
     # Start logging stdout and stderr to file unless crash detect.
-    if ($serverop -eq 'crashdetect') { Start-Transcript -Path "./Logs/ASACrashDetection.log" -Append }
-    else { Start-Transcript -Path "./Logs/ASAServerManager.log" -Append }
+    if ($serverop -eq 'crashdetect') {
+        Start-Transcript -Path "./Logs/ASACrashDetection.log" -Append
+    } else {
+        Start-Transcript -Path "./Logs/ASAServerManager.log" -Append
+    }
 
     # Exit script if lockfile exists, otherwise create one.
     if (Test-Path -Path "./ASA.lock") {
@@ -94,13 +109,12 @@ function main {
         $properties = ConvertFrom-StringData -StringData $propertiesContentEscaped
 
         # TODO Validate properties.
-        Write-Host "Properties loaded:"
+        Write-Host "======= Properties Loaded ======="
         Write-Host "SessionHeader: $([string]$properties.SessionHeader)"
         Write-Host "ActiveMapIDs: $([string]$properties.ActiveMapIDs)"
         Write-Host "ActiveEventID: $([string]$properties.ActiveEventID)"
         Write-Host "AdditionalCMDFlags: $([string]$properties.AdditionalCMDFlags)"
         Write-Host "BackupPath: $([string]$properties.BackupPath)"
-        Write-Host "ForceRespawnChance: $([int]([decimal]$properties.ForceRespawnChance * 100))%"
         Write-Host "MaxPlayers: $([int]$properties.MaxPlayers)"
     }
 
@@ -140,7 +154,7 @@ function startServer {
     updateServer
 
     # Server operation.
-    Write-Host "Startup requested."
+    Write-Host "======= Startup Requested ======="
 
     # Return if server is already running.
     if (isServerRunning) { return }
@@ -149,29 +163,39 @@ function startServer {
     Copy-Item -Path "./Game_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
     Copy-Item -Path "./GameUserSettings_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
 
-    # Determine additional parameters.
+    # Determine if dinos will be force respawned.
     $respawnDinoArgument = ""
-    if ($rollforcerespawndinos)
+    if (!$null -eq $rollforcerespawndinos)
     {
         $diceRoll = Get-Random -Minimum 1 -Maximum 100
-        Write-Host "Rolling for -ForceRespawnDinos: $($diceRoll)"
-        if ($diceRoll -lt $([decimal]$properties.ForceRespawnChance * 100)) {
+        Write-Host "Rolled a $($diceRoll) against -ForceRespawnDinos $($rollforcerespawndinos)."
+        if ($diceRoll -le $rollforcerespawndinos) {
             $respawnDinoArgument = "-ForceRespawnDinos"
             Write-Host "Dinos will be force respawed."
+        } else {
+            Write-Host "Dinos will not be force respawed."
         }
     }
 
+    # Build and add mods parameter if applicable.
     $modIds = getActiveModIds
     if (!$modIds -eq "") {
         $modIds = "-mods=$($modIds)"
+        Write-Host "Including mods with $($modIds)"
     }
 
-    # Start up all maps with a few minutes of stagger inbetween.
-    Write-Host "Starting up server."
+    # Check for event.
+    for ($i = 0; $i -lt $events.Length; $i++) {
+        if ($modIds.contains($events[$i].modId)) {
+            Write-Host "Including $($events[$i].eventLabel) event."
+        }
+    }
+
+    # Start up all maps with a short stagger period inbetween.
     $activeMapIds = getActiveMapIds
     for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
-        Write-Host "Loading map id $($activeMapIds[$i])."
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$($modIds)`" $($properties.AdditionalCMDFlags)"
+        Write-Host "Launching server $($i+1) of $($activeMapIds.Length). [$($activeMapIds[$i])]"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$($modIds)`" $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         Invoke-Expression $commandLine
         timeout /t 60 /nobreak
@@ -180,7 +204,7 @@ function startServer {
 
 function shutdownServer {
     # Server operation.
-    Write-Host "Shutdown requested."
+    Write-Host "======= Shutdown Requested ======="
 
     # Return if server is not running.
     if (-Not (isServerRunning)) { return }
@@ -203,7 +227,10 @@ function shutdownServer {
         timeout /t 240 /nobreak
         Write-Host "rcon: ServerChat [Server]: Restarting in 1 minute."
         for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "ServerChat [Server]: Restarting in 1 minute." }
-        timeout /t 55 /nobreak
+        timeout /t 30 /nobreak
+        Write-Host "rcon: ServerChat [Server]: Restarting in 30 seconds."
+        for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "ServerChat [Server]: Restarting in 30 seconds." }
+        timeout /t 25 /nobreak
     }
 
     # Announce shutdown to all maps, short notice.
@@ -217,8 +244,8 @@ function shutdownServer {
         rcon "$($listeningPorts[$i])" "SaveWorld"
         timeout /t 3 /nobreak
     }
-    Write-Host "rcon: ServerChat [Server]: Server will be back online in approximately 10 minutes."
-    for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "ServerChat [Server]: Server will be back online in approximately 10 minutes." }
+    Write-Host "rcon: ServerChat [Server]: Server will be back online momentarily."
+    for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "ServerChat [Server]: Server will be back online momentarily." }
     timeout /t 5 /nobreak
     Write-Host "rcon: ServerChat [Server]: That doesn't mean wait for it, go touch some grass.. :|"
     for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "ServerChat [Server]: That doesn't mean wait for it, go touch some grass.. :|" }
@@ -252,7 +279,7 @@ function shutdownServer {
 
 function updateServer {
     # Server operation.
-    Write-Host "Update requested."
+    Write-Host "======= Update Requested ======="
 
     # Confirm server is not running.
     if (isServerRunning) {
@@ -266,7 +293,7 @@ function updateServer {
 
 function backupServer {
     # Server operation.
-    Write-Host "Backup requested."
+    Write-Host "======= Backup Requested ======="
 
     # Confirm server is not running.
     if (isServerRunning) {
@@ -295,7 +322,7 @@ function crashDetect {
 
     # Crash detected, run restart now.
     $Script:now = $true
-    $Script:rollforcerespawndinos = $false
+    $Script:rollforcerespawndinos = 0
     restartServer
 }
 
@@ -324,11 +351,9 @@ function setup {
     "ClusterId=MyCoolCluster$($clusterNumber)`n" +
     "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
     "BackupPath=./Backups`n" +
-    "# Chance that wild dinos will force respawn when using the -RollForceRespawnDinos argument. (0.25 = 25%, 0.75 = 75%, etc.)`n" +
-    "ForceRespawnChance=1.0`n" +
     "# Sets the maximum concurrent players in your server.`n" +
     "MaxPlayers=20`n" +
-    "# Copy the admin password you've set in GameUserSettings.ini here. (This tool will not function properly without this.)`")`n" +
+    "# Copy the admin password you've set in GameUserSettings_Queued.ini here. (This tool will not function properly without this.)`")`n" +
     "AdminPassword=`n"
     New-Item -Path "./ASAServer.properties" -ItemType File -Value $initialPropertiesValues
     
@@ -406,7 +431,6 @@ function getActiveModIds {
     } else {
         $activeModIds = "$($properties.ActiveEventID),$($activeModsArray[1])"
     }
-    Write-Host "Active Mod Ids: $($activeModIds)"
 
     return $activeModIds
 }
@@ -414,9 +438,7 @@ function getActiveModIds {
 # Get active maps from server properties.
 function getActiveMapIds {
     # Get active map ids from properties.
-    Write-Host "ActiveMapIDs: $($properties.ActiveMapIDs)"
     $activeMapIds = @($properties.ActiveMapIDs.split(",") | Select-Object -Unique)
-    Write-Host "ActiveMap Count: $(Write-Output -NoEnumerate $activeMapIds.Length)"
 
     return Write-Output -NoEnumerate $activeMapIds
 }
