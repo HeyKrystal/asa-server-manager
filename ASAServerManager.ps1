@@ -38,6 +38,7 @@ param (
 )
 
 # This is a port pool for clustering. (These 8 sets are the most I've ever been able to port forward in Evolved.)
+# All ports used for copy into router config: 7777,7778,7779,7780,7781,7782,7783,7784,7785,7786,7787,7788,7789,7790,7791,7792,27015,27016,27017,27018,27019,27020,27051,27052
 $portPool = @(
     [PortSet]@{ instancePort="7777";rawPort="7778";queryPort="27015";rconPort="32330" }
     [PortSet]@{ instancePort="7779";rawPort="7780";queryPort="27016";rconPort="32332" }
@@ -58,8 +59,8 @@ $maps = @{
 
 # These are the mod ids for events.
 $events = {
-    "927083" # Turkey Trial
-	"927090" # Winter Wonderland
+    "927083", # Turkey Trial
+	"927090", # Winter Wonderland
 	"927084" # Love Ascended
 }
 Write-Host "Known events: $($events)"
@@ -170,7 +171,7 @@ function startServer {
     $activeMapIds = getActiveMapIds
     for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
         Write-Host "Loading map id $($activeMapIds[$i])."
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?QueryPort=$($portPool[$i].queryPort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) $($modIds) $($properties.AdditionalCMDFlags)"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].label)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$($modIds)`" $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         Invoke-Expression $commandLine
         timeout /t 60 /nobreak
@@ -306,6 +307,9 @@ function setup {
     New-Item -Path "./RCON" -ItemType Directory
     New-Item -Path "./SteamCMD" -ItemType Directory
 
+    # Generate random number for unique cluster id.
+    $clusterNumber = Get-Random -Minimum 100000000 -Maximum 999999999
+
     # Create properties file with initial values.
     $initialPropertiesValues = "" +
     "# Server will show up in the list with this value, followed by a hyphen and the map label. (e.g. `"My Cool Cluster - The Island`")`n" +
@@ -317,12 +321,12 @@ function setup {
     "# Include additional command line flags you would like here space-separated. (e.g. `"-PassiveMods=927090 -NoTransferFromFiltering -NoBattlEye`")`n" +
     "AdditionalCMDFlags=-NoTransferFromFiltering -NoBattlEye`n" +
     "# If using clusters populate this with a unique Id, otherwise leave blank. (e.g. `"MyCoolCluster123456789`")`n" +
-    "ClusterId=MyCoolCluster123456789`n" +
+    "ClusterId=MyCoolCluster$($clusterNumber)`n" +
     "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
     "BackupPath=./Backups`n" +
     "# Chance that wild dinos will force respawn when using the -RollForceRespawnDinos argument. (0.25 = 25%, 0.75 = 75%, etc.)`n" +
     "ForceRespawnChance=1.0`n" +
-    "# Sets the maximum concurrent players in your server.`")`n" +
+    "# Sets the maximum concurrent players in your server.`n" +
     "MaxPlayers=20`n" +
     "# Copy the admin password you've set in GameUserSettings.ini here. (This tool will not function properly without this.)`")`n" +
     "AdminPassword=`n"
@@ -344,7 +348,7 @@ function setup {
     Remove-Item -Path "./SteamCMD.zip"
     Remove-Item -Path "./RCON/rcon-0.10.3-win64" -Recurse
     
-    #Update steamcmd..
+    #Update steamcmd.
     Write-Host "Updating steamcmd"
     SteamCMD\steamcmd.exe +quit
     
@@ -402,15 +406,13 @@ function getActiveModIds {
     } else {
         $activeModIds = "$($properties.ActiveEventID),$($activeModsArray[1])"
     }
-
-    Write-Host "Active mod ids: $($activeModIds)"
+    Write-Host "Active Mod Ids: $($activeModIds)"
 
     return $activeModIds
 }
 
 # Get active maps from server properties.
 function getActiveMapIds {
-
     # Get active map ids from properties.
     Write-Host "ActiveMapIDs: $($properties.ActiveMapIDs)"
     $activeMapIds = @($properties.ActiveMapIDs.split(",") | Select-Object -Unique)
@@ -426,15 +428,12 @@ function getListeningPorts {
     $listeningPortIndex = 0
     for ($i = 0; $i -lt $portPool.Length; $i++) {
         Write-Host "Loop i:$($i)"
-        if (Test-NetConnection -ComputerName "127.0.0.1" -Port "$($portPool[$i].rconPort)" -InformationLevel Quiet)
-        {
+        if (Test-NetConnection -ComputerName "127.0.0.1" -Port "$($portPool[$i].rconPort)" -InformationLevel Quiet) {
             Write-Host "Port $($portPool[$i].rconPort) is listening.."
             #[string[]]$listeningPorts[$listeningPortIndex] = $($portPool[$i].rconPort)
             [string[]]$listeningPorts += ,$($portPool[$i].rconPort)
             $listeningPortIndex++
-        }
-        else
-        {
+        } else {
             Write-Host "Port $($portPool[$i].rconPort) is not listening.."
         }
     }
@@ -455,7 +454,7 @@ function rcon {
 
     # User rcon to send command to server.
     $commandLine = "cmd /c start '' /b ./RCON/rcon -a `"localhost:$($targetPort)`" -p `"$($properties.AdminPassword)`" -l `"./RCON/rcon.log`" -s `"$($command)`""
-    Write-Host $commandLine
+    Write-Host "cmd /c start '' /b ./RCON/rcon -a `"localhost:$($targetPort)`" -p ************* -l `"./RCON/rcon.log`" -s `"$($command)`""
     Invoke-Expression $commandLine
 }
 
