@@ -46,6 +46,16 @@ $ ./ASAServerManager.ps1 -serverop restart
 $ ./ASAServerManager.ps1 -serverop restart -now
 ```
 
+<br>**-rouletteevents** : This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. (This will not overrided events specified in ASAServer.properties)
+```
+$ ./ASAServerManager.ps1 -serverop restart -eventroulette 927083,927090,927084
+```
+
+<br>**-rouletteweight** : Paired with -eventroulette, this paramater allows you to provide a percentage that an event roulette will occur. Must provide a value of 0-100.
+```
+$ ./ASAServerManager.ps1 -serverop restart -eventroulette 927083,927090,927084 -eventweight 50
+```
+
 <br>**-rollforcerespawndinos** : This flag introduces a chance that ```-ForceRespawnDinos``` will be set on server startup, thus respawning all wild dinos. The value represents the percentage chance a forced respawn will occur and must be a value of 0-100. This flag will only be triggered on ```-serverop restart```.
 ```
 $ ./ASAServerManager.ps1 -serverop restart -rollforcerespawndinos 75

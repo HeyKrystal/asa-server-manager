@@ -18,16 +18,30 @@
     This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on -serverop shutdown or -serverop restart.
 
     .PARAMETER eventroulette
-    This flag will pick a random event from the $events list.
+    This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. This will not overrided events specified in ASAServer.properties
+
+    .PARAMETER rouletteweight
+    Paired with -eventroulette, this paramater allows you to specify a percentage chance that an event roulette will occur. Must provide a value of 0-100.
 
     .PARAMETER rollforcerespawndinos
     This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The value represents the percentage chance a forced respawn will occur and must be a value of 0-100. This flag will only be triggered on -serverop restart.
 #>
+[CmdletBinding(DefaultParameterSetName='Default')]
 param (
     # The server operation to perform.
     [Parameter(Mandatory)]
-    [ValidateSet("restart", "shutdown", "backup", "update", "setup", "crashdetect")]
+    [ValidateSet("restart", "shutdown", "backup", "update", "setup", "crashdetect", "skip")]
     [string]$serverop,
+
+    # Activates event roulette on restart.
+    [Parameter(ParameterSetName='Roulette',Mandatory=$true)]
+    [ValidatePattern("^\d{6,8}$")]
+    [String[]]$eventroulette,
+
+    # Rolls for event roulette using provided percentage.
+    [Parameter(ParameterSetName='Roulette',Mandatory=$false)]
+    [ValidateRange(0,100)]
+    [int]$eventweight,
 
     # Rolls for -ForceRespawnDinos on restart using provided percentage.
     [Parameter()]
@@ -86,16 +100,18 @@ function main {
     }
 
     # Exit script if lockfile exists, otherwise create one.
-    if (Test-Path -Path "./ASA.lock") {
+    if (Test-Path -Path "./Status/ASA.lock") {
         Write-Host "Execution blocked by ASA.lock file. An ASA script is already running."
-        Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file and try again."
+        Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file in the Status folder and try again."
         timeout /t 10
         Exit
     }
     else {
-        New-Item -Name ASA.lock -Force | Out-Null
+        New-Item -Name ./Status/ASA.lock -Force | Out-Null
         Write-Host "Starting ASAServerManager script and creating lock file."
     }
+
+    # Validate parameters.
 
     # Exit script if properties file doesnt exist.
     if (!(Test-Path -Path "./ASAServer.properties") -AND !($serverop -eq 'setup')) {
@@ -135,7 +151,7 @@ function main {
 
     # Wrap up and delete lockfile.
     Write-Host "Exiting ASAServerManager script and removing lock file."
-    Remove-Item -Path "./ASA.lock"
+    Remove-Item -Path "./Status/ASA.lock"
     
     # Stop logging to file
     Stop-Transcript
@@ -167,7 +183,7 @@ function startServer {
     $respawnDinoArgument = ""
     if (!$null -eq $rollforcerespawndinos)
     {
-        $diceRoll = Get-Random -Minimum 1 -Maximum 100
+        $diceRoll = Get-Random -Minimum 1 -Maximum 101
         Write-Host "Rolled a $($diceRoll) against -ForceRespawnDinos $($rollforcerespawndinos)."
         if ($diceRoll -le $rollforcerespawndinos) {
             $respawnDinoArgument = "-ForceRespawnDinos"
@@ -177,19 +193,46 @@ function startServer {
         }
     }
 
-    # Build and add mods parameter if applicable.
-    $modIds = getActiveModIds
-    if (!$modIds -eq "") {
-        $modIds = "-mods=$($modIds)"
-        Write-Host "Including mods with $($modIds)"
+    # Check if event specified or roulette requested.
+    if ($properties.ActiveEventID -eq "" -AND $eventroulette.Count -gt 0) {
+        if (!$null -eq $eventweight) {
+            $eventweight = 100
+        }
+        $diceRoll = Get-Random -Minimum 1 -Maximum 100
+        Write-Host "Rolled a $($diceRoll) against -EventChance $($eventweight)."
+        if ($diceRoll -le $eventweight) {
+            $diceRoll = Get-Random -Minimum 0 -Maximum ($eventroulette.Count)
+            $activeEventId = $eventroulette[$diceRoll]
+        }
+    } elseif (!$properties.ActiveEventID -eq "") {
+        $activeEventId = $properties.ActiveEventID
     }
-
-    # Check for event.
+    $eventIdentified = $false;
     for ($i = 0; $i -lt $events.Length; $i++) {
-        if ($modIds.contains($events[$i].modId)) {
+        if ($activeEventId -eq ($events[$i].modId)) {
             Write-Host "Including $($events[$i].eventLabel) event."
+            $eventIdentified = $true;
         }
     }
+    if (!$activeEventId -eq "" -AND !$eventIdentified) {
+        Write-Host "Including $($activeEventId) mod."
+    }
+    
+    # Build and add mods parameter if applicable.
+    $modIds = getActiveModIds
+    if (!$activeEventId -eq "") {
+        $modIds = "$($activeEventId),$($modIds)"
+    }
+    if (!$modIds -eq "") {
+        $modIds = "-mods=$($modIds)"
+        Write-Host "Including mods with $($modIds)."
+    }
+
+    # Set crash recovery properties.
+    if (Test-Path -Path "./Status/ASACrashRecovery.properties") {
+        Remove-Item -Path "./Status/ASACrashRecovery.properties"
+    }
+    New-Item -Path "./Status/ASACrashRecovery.properties" -ItemType File -Value "# Crash Recovery Properties`nActiveEventID=$($activeEventId)"
 
     # Start up all maps with a short stagger period inbetween.
     $activeMapIds = getActiveMapIds
@@ -320,6 +363,13 @@ function crashDetect {
         return
     }
 
+    # Load crash recovery properties file.
+    $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
+    $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
+    $crashRecoveryProperties = ConvertFrom-StringData -StringData $crashRecoveryPropertiesContentEscaped
+
+    $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
+
     # Crash detected, run restart now.
     $Script:now = $true
     $Script:rollforcerespawndinos = 0
@@ -332,6 +382,7 @@ function setup {
     New-Item -Path "./ASAServers" -ItemType Directory
     New-Item -Path "./Backups" -ItemType Directory
     New-Item -Path "./RCON" -ItemType Directory
+    New-Item -Path "./Status" -ItemType Directory
     New-Item -Path "./SteamCMD" -ItemType Directory
 
     # Generate random number for unique cluster id.
@@ -374,7 +425,7 @@ function setup {
     Remove-Item -Path "./RCON/rcon-0.10.3-win64" -Recurse
     
     #Update steamcmd.
-    Write-Host "Updating steamcmd"
+    Write-Host "Updating steamcmd."
     SteamCMD\steamcmd.exe +quit
     
     # Update the server before running.
@@ -425,12 +476,7 @@ function getActiveModIds {
     # Read ini file to get ActiveMods
     $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
     $activeModsArray = $activeModsLine -split "="
-    
-    if ($properties.ActiveEventID -eq "") {
-        $activeModIds = "$($activeModsArray[1])"
-    } else {
-        $activeModIds = "$($properties.ActiveEventID),$($activeModsArray[1])"
-    }
+    $activeModIds = "$($activeModsArray[1])"
 
     return $activeModIds
 }
@@ -449,18 +495,12 @@ function getListeningPorts {
     [string[]]$listeningPorts = @()
     $listeningPortIndex = 0
     for ($i = 0; $i -lt $portPool.Length; $i++) {
-        Write-Host "Loop i:$($i)"
         if (Test-NetConnection -ComputerName "127.0.0.1" -Port "$($portPool[$i].rconPort)" -InformationLevel Quiet) {
-            Write-Host "Port $($portPool[$i].rconPort) is listening.."
-            #[string[]]$listeningPorts[$listeningPortIndex] = $($portPool[$i].rconPort)
+            Write-Host "Port $($portPool[$i].rconPort) is listening."
             [string[]]$listeningPorts += ,$($portPool[$i].rconPort)
             $listeningPortIndex++
-        } else {
-            Write-Host "Port $($portPool[$i].rconPort) is not listening.."
         }
     }
-
-    Write-Host "Array $($listeningPorts)"
     
     return Write-Output -NoEnumerate $listeningPorts
 }
