@@ -46,12 +46,12 @@ $ ./ASAServerManager.ps1 -serverop restart
 $ ./ASAServerManager.ps1 -serverop restart -now
 ```
 
-<br>**-rouletteevents** : This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. (This will not overrided events specified in ASAServer.properties)
+<br>**-eventroulette** : This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. (This will not overrided events specified in ASAServer.properties)
 ```
 $ ./ASAServerManager.ps1 -serverop restart -eventroulette 927083,927090,927084
 ```
 
-<br>**-rouletteweight** : Paired with -eventroulette, this paramater allows you to provide a percentage that an event roulette will occur. Must provide a value of 0-100.
+<br>**-rouletteweight** : Paired with -eventroulette, this paramater allows you to specify a percentage chance that an event roulette will occur. Must provide a value of 0-100.
 ```
 $ ./ASAServerManager.ps1 -serverop restart -eventroulette 927083,927090,927084 -eventweight 50
 ```
@@ -87,4 +87,4 @@ I recommended scheduling these commands with Windows Task Scheduler so that they
 As mentioned above, this is primarily a personal project. If there are obviously valid problems I will address them [here](https://github.com/HeyKrystal/asa-server-manager/issues/new). However, requests that border enhancements or conveniences will be ignored.
 
 ## Contribution
-I'm not super familiar with GitHub's collaboration features. I'll try to be accomodating where it makes sense though. If you're wanting to make edits for your own personal use feel free to fork the project and do whatyever you'd like to it. 😊
+I'm not super familiar with GitHub's collaboration features. I'll try to be accomodating where it makes sense though. If you're wanting to make edits for your own personal use feel free to fork the project and do whatever you'd like to it. 😊
