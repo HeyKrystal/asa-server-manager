@@ -5,56 +5,97 @@
     .DESCRIPTION
     The primary goal in developing this script was to make an ark management tool that embodied "set it and forget it. This tool provides several functions for starting and maintaining an Ark Survival Ascended server that, when paired with task scheduler, provides a very low maintenance experience. You can schedule nightly restarts that will automatically backup saves to a specified location. The server will automatically check for updates and install them before running. Backups and updates can also be requested on demand, as long as the server is not already running to prevent corruption. Backups are also compressed to save space. (Install WinRAR for better compression. The script will use it automatically if you have it installed.)  Protections are also in place so that only one instance of this script can be executed at any given time, again to prevent corruption. This script also has a setup function that will download the tools you need and setup the project structure required by the script. Actions for this script are kept in logs to help determine unexpected issues. This script also allows you to queue up changes to your config files for next restart.
 
-    .PARAMETER serverop
-    Specifies the server operation you would like to perform.
-        - restart: Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat. Server starts back up immediately after.
-        - shutdown: Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat.
-        - backup: Compresses the server's "Saved" folder and copies it to the backup patch specified in the ASAServer.properties file.
-        - update: Runs steamcmd and updates the server application.
-        - setup: Should only be used on initial script usage. Sets up project structure, downloads required tools, and downloads the server application.
-        - crashdetect: This should be scheduled to run periodically; every 30 seconds is effective. It checks if the ark server is running and restarts it if it is not.
+    .PARAMETER setup
+    Should only be used on initial script usage. Sets up project structure, downloads required tools, and installs the server application.
 
-    .PARAMETER now
-    This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on -serverop shutdown or -serverop restart.
+    .PARAMETER shutdown
+    Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat using RCON.
+    
+    .PARAMETER restart
+    Kicks off a 1 hour delayed shutdown sequence that includes warnings in server chat using RCON. Server starts back up immediately after.
+
+    .PARAMETER crashdetect
+    Checks if the ark server is running and restarts it if it is not. This should be scheduled to run periodically; every 30 seconds is effective.
+
+    .PARAMETER backup
+    Compresses the server's "Saved" folder and copies it to the backup path specified in the ASAServer.properties file.
+
+    .PARAMETER update
+    Triggers steamcmd to update and validate the Ark Ascended Server application. Recommended to set this flag during server restarts.
 
     .PARAMETER eventroulette
-    This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. This will not overrided events specified in ASAServer.properties
+    This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. This will not overrided events specified in the ASAServer.properties file. 
 
-    .PARAMETER rouletteweight
-    Paired with -eventroulette, this paramater allows you to specify a percentage chance that an event roulette will occur. Must provide a value of 0-100.
+    .PARAMETER roulettechance
+    Paired with -eventroulette, this paramater allows you to specify the percentage chance that an event roulette will occur. Must provide a value of 0-100. Default value is 100.
 
     .PARAMETER rollforcerespawndinos
-    This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The value represents the percentage chance a forced respawn will occur and must be a value of 0-100. This flag will only be triggered on -serverop restart.
+    This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The value provided specifies the percentage chance that a forced respawn will occur and must be a value of 0-100. This flag can only be triggered on -serverop restart.
+
+    .PARAMETER now
+    This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on -shutdown or -restart operations.
+
+    .PARAMETER preservestate
+    This flag can be used during restarts to keep events active that were rolled from -eventroulette; The -crashdetect operation has -preservestate set to true by default.
+
+    .PARAMETER skip
+    This flag is for troubleshooting/development. When set, major server operations are simulated. Some minor functions and logging still occur. Not for general use.
+
+    .PARAMETER istest
+    This flag is for skipping the pause in the setup operation. Not for general use.
 #>
 [CmdletBinding(DefaultParameterSetName='Default')]
 param (
-    # The server operation to perform.
-    [Parameter(Mandatory)]
-    [ValidateSet("restart", "shutdown", "backup", "update", "setup", "crashdetect", "skip")]
-    [string]$serverop,
 
-    # Activates event roulette on restart.
-    [Parameter(ParameterSetName='Roulette',Mandatory=$true)]
-    [ValidatePattern("^\d{6,8}$")]
-    [String[]]$eventroulette,
+    # Primary Operations
+    [Parameter()]
+    [switch]$setup = $false,
 
-    # Rolls for event roulette using provided percentage.
-    [Parameter(ParameterSetName='Roulette',Mandatory=$false)]
+    [Parameter()]
+    [switch]$shutdown = $false,
+
+    [Parameter()]
+    [switch]$restart = $false,
+
+    [Parameter()]
+    [switch]$crashdetect = $false,
+
+    # Sub Operations
+    [Parameter()]
+    [switch]$backup = $false,
+
+    [Parameter()]
+    [switch]$update = $false,
+
+    # Special Settings
+    [Parameter()]
+    [ValidatePattern("^\d{6,8}(,\d{6,8})*$")]
+    [String]$eventroulette,
+
+    [Parameter()]
     [ValidateRange(0,100)]
-    [int]$eventweight,
+    [int]$roulettechance = -1,
 
-    # Rolls for -ForceRespawnDinos on restart using provided percentage.
     [Parameter()]
     [ValidateRange(0,100)]
     [int]$rollforcerespawndinos,
 
-    # Skips the 1 hour countdown on shutdown/restart.
+    # Conditions
     [Parameter()]
-    [switch]$now = $false
+    [switch]$now = $false,
+
+    [Parameter()]
+    [switch]$preservestate = $false,
+
+    [Parameter()]
+    [switch]$skip = $false,
+
+    [Parameter()]
+    [switch]$istest = $false
 )
 
 # This is a port pool for clustering. (These 8 sets are the most I've ever been able to port forward in Evolved.)
-# All ports used for copy into router config: 7777,7778,7779,7780,7781,7782,7783,7784,7785,7786,7787,7788,7789,7790,7791,7792,27015,27016,27017,27018,27019,27020,27051,27052
+# Port list for router config: 7777,7778,7779,7780,7781,7782,7783,7784,7785,7786,7787,7788,7789,7790,7791,7792,27015,27016,27017,27018,27019,27020,27051,27052
 $portPool = @(
     [PortSet]@{ instancePort="7777"; rawPort="7778"; queryPort="27015"; rconPort="32330" }
     [PortSet]@{ instancePort="7779"; rawPort="7780"; queryPort="27016"; rconPort="32332" }
@@ -67,21 +108,13 @@ $portPool = @(
 )
 
 # Used for dynamically labeling servers.
-Class ASAMap {
-    [String]$apiName
-    [string]$mapLabel
-}
 $maps = @{
     TheIsland_WP=[ASAMap]@{ apiName="TheIsland_WP"; mapLabel="The Island" }
     Svartalfheim_WP=[ASAMap]@{ apiName="Svartalfheim_WP"; mapLabel="Svartalfheim(Test)" }
     Nyrandil=[ASAMap]@{ apiName="Nyrandil"; mapLabel="Nyrandil(Test)" }
 }
 
-# These are the mod ids for events.
-Class ASAEvent {
-    [String]$modId
-    [String]$eventLabel
-}
+# These are the mod ids for core events.
 $events = @(
     [ASAEvent]@{ modId="927083"; eventLabel="Turkey Trial" }
 	[ASAEvent]@{ modId="927090"; eventLabel="Winter Wonderland" }
@@ -89,6 +122,7 @@ $events = @(
 )
 
 function main {
+
     # Script launched
     Write-Host "======= Script Launched ======="
 
@@ -101,52 +135,45 @@ function main {
 
     # Exit script if lockfile exists, otherwise create one.
     if (Test-Path -Path "./Status/ASA.lock") {
-        Write-Host "Execution blocked by ASA.lock file. An ASA script is already running."
+        Write-Host "Execution blocked by ASA.lock file. An instance of ASAServerManager.ps1 is already running."
         Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file in the Status folder and try again."
-        timeout /t 10
-        Exit
+        exit
     }
     else {
         New-Item -Name ./Status/ASA.lock -Force | Out-Null
         Write-Host "Starting ASAServerManager script and creating lock file."
     }
 
-    # Validate parameters.
+    # Validate parameters combinations.
+    if (validateParameters) {
+        # Exit script if properties file doesnt exist.
+        if (!(Test-Path -Path "./ASAServer.properties") -AND !$setup) {
+            Write-Host "Unable to find ASAServer.properties; run script with `"setup`" argument."
+            timeout /t 10
+            $serverop = ""
+        } elseif (Test-Path -Path "./ASAServer.properties") {
+            # Load properties file.
+            $propertiesContent = Get-Content ".\ASAServer.properties" -raw
+            $propertiesContentEscaped = $propertiesContent -replace '\\', '\\'
+            $properties = ConvertFrom-StringData -StringData $propertiesContentEscaped
 
-    # Exit script if properties file doesnt exist.
-    if (!(Test-Path -Path "./ASAServer.properties") -AND !($serverop -eq 'setup')) {
-        Write-Host "Unable to find ASAServer.properties; run script with `"setup`" argument."
-        timeout /t 10
-        $serverop = ""
-    } elseif (Test-Path -Path "./ASAServer.properties") {
-        # Load properties file.
-        $propertiesContent = Get-Content ".\ASAServer.properties" -raw
-        $propertiesContentEscaped = $propertiesContent -replace '\\', '\\'
-        $properties = ConvertFrom-StringData -StringData $propertiesContentEscaped
+            # TODO Validate properties.
+            Write-Host "======= Properties Loaded ======="
+            Write-Host "SessionHeader: $([string]$properties.SessionHeader)"
+            Write-Host "ActiveMapIDs: $([string]$properties.ActiveMapIDs)"
+            Write-Host "ActiveEventID: $([string]$properties.ActiveEventID)"
+            Write-Host "AdditionalCMDFlags: $([string]$properties.AdditionalCMDFlags)"
+            Write-Host "BackupPath: $([string]$properties.BackupPath)"
+            Write-Host "MaxPlayers: $([int]$properties.MaxPlayers)"
+        }
 
-        # TODO Validate properties.
-        Write-Host "======= Properties Loaded ======="
-        Write-Host "SessionHeader: $([string]$properties.SessionHeader)"
-        Write-Host "ActiveMapIDs: $([string]$properties.ActiveMapIDs)"
-        Write-Host "ActiveEventID: $([string]$properties.ActiveEventID)"
-        Write-Host "AdditionalCMDFlags: $([string]$properties.AdditionalCMDFlags)"
-        Write-Host "BackupPath: $([string]$properties.BackupPath)"
-        Write-Host "MaxPlayers: $([int]$properties.MaxPlayers)"
-    }
-
-    # Perform requested operation.
-    if ($serverop -eq 'restart') {
-        restartServer
-    } elseif ($serverop -eq 'shutdown') {
-        shutdownServer
-    } elseif ($serverop -eq 'backup') {
-        backupServer
-    } elseif ($serverop -eq 'update') {
-        updateServer
-    } elseif ($serverop -eq 'setup') {
-        setup
-    } elseif ($serverop -eq 'crashdetect') {
-        crashDetect
+        # Perform requested operations.
+        if ($setup) { setup }
+        if ($shutdown -OR $restart) { shutdownServer }
+        if ($backup) { backupServer }
+        if ($update) { updateServer }
+        if ($restart) { restartServer }
+        if ($crashdetect) { crashDetect }
     }
 
     # Wrap up and delete lockfile.
@@ -157,95 +184,98 @@ function main {
     Stop-Transcript
 }
 
-function restartServer {
-    # Attempt shutdown.
-    shutdownServer
+function setup {
 
-    #Attempt startup.
-    startServer
-}
+    # Server operation.
+    Write-Host "======= Setup Requested ======="
+    
+    # Confirm server is not running.
+    if (isServerRunning) {
+        Write-Host -ForegroundColor Red "ERROR: Cannot run -setup while server while running."
+        return
+    }
 
-function startServer {
+    # Setup project structure.
+    Write-Host "Setting up project structure."
+    New-Item -Path "./ASAServers" -ItemType Directory
+    New-Item -Path "./Backups" -ItemType Directory
+    New-Item -Path "./RCON" -ItemType Directory
+    New-Item -Path "./SteamCMD" -ItemType Directory
+
+    # Generate random number for unique cluster id.
+    $clusterNumber = Get-Random -Minimum 100000000 -Maximum 999999999
+
+    # Create properties file with initial values.
+    $initialPropertiesValues = "" +
+    "# Server will show up in the list with this value, followed by a hyphen and the map label. (e.g. `"My Cool Cluster - The Island`")`n" +
+    "SessionHeader=My Cool Cluster`n" +
+    "# Determines which map the server will host. Comma delimit for clusters. Duplicates won't work.`n" +
+    "ActiveMapIDs=TheIsland_WP`n" +
+    "# Put event mod id to activate an event, otherwise leave blank. This property will always override -eventroulette.`n" +
+    "ActiveEventID=`n" +
+    "# Include additional command line flags you would like here space-separated. (e.g. `"-PassiveMods=927090 -NoTransferFromFiltering -NoBattlEye`")`n" +
+    "AdditionalCMDFlags=-NoTransferFromFiltering -NoBattlEye`n" +
+    "# If using clusters populate this with a unique Id, otherwise leave blank. (e.g. `"MyCoolCluster123456789`")`n" +
+    "ClusterId=MyCoolCluster$($clusterNumber)`n" +
+    "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
+    "BackupPath=./Backups`n" +
+    "# Sets the maximum concurrent players in your server.`n" +
+    "MaxPlayers=20`n" +
+    "# Copy the admin password you've set in GameUserSettings_Queued.ini here. (This tool will not function properly without this.)`")`n" +
+    "AdminPassword=`n"
+    New-Item -Path "./ASAServer.properties" -ItemType File -Value $initialPropertiesValues
+    
+    # Download the utilities used by the script.
+    Write-Host "Downloading & unpacking utilities used by the script."
+    Invoke-WebRequest -Uri "https://github.com/gorcon/rcon-cli/releases/download/v0.10.3/rcon-0.10.3-win64.zip" -Outfile RCON.zip
+    Expand-Archive -Path "./RCON.zip" -DestinationPath "./RCON/"
+    Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -Outfile SteamCMD.zip
+    Expand-Archive -Path "./SteamCMD.zip" -DestinationPath "./SteamCMD/"
+    
+    # Relocate rcon-cli for easier access.
+    Move-Item -Path "./RCON/rcon-0.10.3-win64/*" -Destination "./RCON"
+    
+    # Cleanup.
+    Write-Host "Cleaning up."
+    Remove-Item -Path "./RCON.zip"
+    Remove-Item -Path "./SteamCMD.zip"
+    Remove-Item -Path "./RCON/rcon-0.10.3-win64" -Recurse
+    
+    #Update steamcmd.
+    Write-Host "Updating steamcmd."
+    SteamCMD\steamcmd.exe +quit
+    
     # Update the server before running.
     updateServer
 
-    # Server operation.
-    Write-Host "======= Startup Requested ======="
+    # Next steps.
+    New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer" -ItemType Directory
+    Write-Host "`nSetup complete, check out the ASAServer.properties for important settings before starting the server."
+    Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the `"./ASAServers/ShooterGame/Saved/Config/WindowsServer`" folder."
+    if (!$istest) { Pause }
 
-    # Return if server is already running.
-    if (isServerRunning) { return }
-
-    # Replace ini files with backups.
-    Copy-Item -Path "./Game_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
-    Copy-Item -Path "./GameUserSettings_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
-
-    # Determine if dinos will be force respawned.
-    $respawnDinoArgument = ""
-    if (!$null -eq $rollforcerespawndinos)
-    {
-        $diceRoll = Get-Random -Minimum 1 -Maximum 101
-        Write-Host "Rolled a $($diceRoll) against -ForceRespawnDinos $($rollforcerespawndinos)."
-        if ($diceRoll -le $rollforcerespawndinos) {
-            $respawnDinoArgument = "-ForceRespawnDinos"
-            Write-Host "Dinos will be force respawed."
-        } else {
-            Write-Host "Dinos will not be force respawed."
-        }
+    # Create queued versions of ini files for easier configuration updates.
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
+        Write-Host "Creating queues version of Game.ini"
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game_Queued.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
+        Write-Host "Creating regular and queued versions of Game.ini"
+        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" | Out-Null
+        New-Item -Name "./Game_Queued.ini" | Out-Null
     }
 
-    # Check if event specified or roulette requested.
-    if ($properties.ActiveEventID -eq "" -AND $eventroulette.Count -gt 0) {
-        if (!$null -eq $eventweight) {
-            $eventweight = 100
-        }
-        $diceRoll = Get-Random -Minimum 1 -Maximum 100
-        Write-Host "Rolled a $($diceRoll) against -EventChance $($eventweight)."
-        if ($diceRoll -le $eventweight) {
-            $diceRoll = Get-Random -Minimum 0 -Maximum ($eventroulette.Count)
-            $activeEventId = $eventroulette[$diceRoll]
-        }
-    } elseif (!$properties.ActiveEventID -eq "") {
-        $activeEventId = $properties.ActiveEventID
-    }
-    $eventIdentified = $false;
-    for ($i = 0; $i -lt $events.Length; $i++) {
-        if ($activeEventId -eq ($events[$i].modId)) {
-            Write-Host "Including $($events[$i].eventLabel) event."
-            $eventIdentified = $true;
-        }
-    }
-    if (!$activeEventId -eq "" -AND !$eventIdentified) {
-        Write-Host "Including $($activeEventId) mod."
-    }
-    
-    # Build and add mods parameter if applicable.
-    $modIds = getActiveModIds
-    if (!$activeEventId -eq "") {
-        $modIds = "$($activeEventId),$($modIds)"
-    }
-    if (!$modIds -eq "") {
-        $modIds = "-mods=$($modIds)"
-        Write-Host "Including mods with $($modIds)."
-    }
-
-    # Set crash recovery properties.
-    if (Test-Path -Path "./Status/ASACrashRecovery.properties") {
-        Remove-Item -Path "./Status/ASACrashRecovery.properties"
-    }
-    New-Item -Path "./Status/ASACrashRecovery.properties" -ItemType File -Value "# Crash Recovery Properties`nActiveEventID=$($activeEventId)"
-
-    # Start up all maps with a short stagger period inbetween.
-    $activeMapIds = getActiveMapIds
-    for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
-        Write-Host "Launching server $($i+1) of $($activeMapIds.Length). [$($activeMapIds[$i])]"
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$($modIds)`" $($properties.AdditionalCMDFlags)"
-        Write-Host $commandLine
-        Invoke-Expression $commandLine
-        timeout /t 60 /nobreak
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+        Write-Host "Creating queues version of GameUserSettings.ini"
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings_Queued.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+        Write-Host "Creating regular and queued versions of GameUserSettings.ini"
+        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Out-Null
+        New-Item -Name "./GameUserSettings_Queued.ini" | Out-Null
     }
 }
 
 function shutdownServer {
+
     # Server operation.
     Write-Host "======= Shutdown Requested ======="
 
@@ -296,67 +326,108 @@ function shutdownServer {
 
     # Shutdown all maps.
     Write-Host "rcon: DoExit"
-    for ($i = 0; $i -lt $listeningPorts.Length; $i++) { rcon "$($listeningPorts[$i])" "DoExit" }
+    for ($i = 0; $i -lt $listeningPorts.Length; $i++) { if (!$skip) { rcon "$($listeningPorts[$i])" "DoExit" } }
+}
 
-    # Timeout up to 2 minutes for process to close before backup.
-    Write-Host "Waiting for process to exit before performing backup."
-    $backedUp = $false
-    for ($i = 0; $i -lt 12; $i++) {
-        timeout /t 10 /nobreak
-        if (-Not (isServerRunning)) {
-            # Create archive after shutdown.
-            backupServer
-            $backedUp = $true
+function restartServer {
 
-            break
+    # Server operation.
+    Write-Host "======= Startup Requested ======="
+
+    # Return if server is already running.
+    if (isServerRunning) { return }
+
+    # Handle -preservestate related properties.
+    if ($preservestate -AND !$crashdetect) {
+        # Load crash recovery properties file.
+        $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
+        $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
+        $crashRecoveryProperties = ConvertFrom-StringData -StringData $crashRecoveryPropertiesContentEscaped
+    
+        # Set active event id from recovery file.
+        Write-Host "Restoring state from ASACrashRecovery.properties file."
+        $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
+    } else {
+        # Replace ini files with backups.
+        Copy-Item -Path "./Game_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
+        Copy-Item -Path "./GameUserSettings_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
+    }
+
+    # Determine if dinos will be force respawned.
+    $respawnDinoArgument = ""
+    if (!$null -eq $rollforcerespawndinos)
+    {
+        $diceRoll = Get-Random -Minimum 1 -Maximum 101
+        Write-Host "Rolled a $($diceRoll) against -ForceRespawnDinos $($rollforcerespawndinos)."
+        if ($diceRoll -le $rollforcerespawndinos) {
+            $respawnDinoArgument = "-ForceRespawnDinos"
+            Write-Host "Dinos will be force respawed."
+        } else {
+            Write-Host "Dinos will not be force respawed."
         }
     }
 
-    # If true there may be an orphaned server running requiring a process kill.
-    if (!$backedUp)
-    {
-        Write-Host "Backup failed because server was still running. ArkAscendedServer processes may need to be killed manually before proceeding."
-        Write-Host "Also double check ASAServer.properties file. If invalid ActiveMapIDs are listed, they will cause zombie servers like this."
+    # Check if event specified or roulette requested.
+    if (!$null -eq $eventroulette) {
+        $eventroulette = $eventroulette.Split(",")
     }
-}
-
-function updateServer {
-    # Server operation.
-    Write-Host "======= Update Requested ======="
-
-    # Confirm server is not running.
-    if (isServerRunning) {
-        Write-Host "Cannot patch server while updating."
-        return
+    if ($properties.ActiveEventID -eq "" -AND $eventroulette.Count -gt 0) {
+        if ($roulettechance -lt 0) {
+            Write-Host "Setting default roulettechance of 100."
+            $roulettechance = 100
+        }
+        $diceRoll = Get-Random -Minimum 1 -Maximum 100
+        Write-Host "Rolled a $($diceRoll) against -roulettechance $($roulettechance)."
+        if ($diceRoll -le $roulettechance) {
+            $diceRoll = Get-Random -Minimum 0 -Maximum ($eventroulette.Count)
+            $activeEventId = $eventroulette[$diceRoll]
+        }
+    } elseif (!$properties.ActiveEventID -eq "") {
+        $activeEventId = $properties.ActiveEventID
+    }
+    $eventIdentified = $false;
+    for ($i = 0; $i -lt $events.Length; $i++) {
+        if ($activeEventId -eq ($events[$i].modId)) {
+            Write-Host "Including $($events[$i].eventLabel) event."
+            $eventIdentified = $true;
+        }
+    }
+    if (!$activeEventId -eq "" -AND !$eventIdentified) {
+        Write-Host "Including $($activeEventId) mod."
+    }
+    
+    # Build and add mods parameter if applicable.
+    $modIds = getActiveModIds
+    if (!$activeEventId -eq "") {
+        $modIds = "$($activeEventId),$($modIds)"
+    }
+    if (!$modIds -eq "") {
+        $modIds = "-mods=$($modIds)"
+        Write-Host "Including mods with $($modIds)."
     }
 
-    # Update server using steamcmd.
-    SteamCMD\steamcmd.exe +force_install_dir ../ASAServers/ +login anonymous +app_update 2430930 validate +quit
-}
-
-function backupServer {
-    # Server operation.
-    Write-Host "======= Backup Requested ======="
-
-    # Confirm server is not running.
-    if (isServerRunning) {
-        Write-Host "Cannot archive save data while server is running."
-        return
+    # Set crash recovery properties.
+    Write-Host "Storing state in ASACrashRecovery.properties file."
+    if (Test-Path -Path "./Status/ASACrashRecovery.properties") {
+        Remove-Item -Path "./Status/ASACrashRecovery.properties"
     }
+    New-Item -Path "./Status/ASACrashRecovery.properties" -ItemType File -Value "# Crash Recovery Properties`nActiveEventID=$($activeEventId)"
 
-    # Archive backup of the Saved folder with YYYY-MM-DD-HHMM format.
-    $archiveName = Get-Date -Format "yyyy-MM-dd_HHmm"
-    Write-Host "Archiving Shootergame\Saved to $([string]$properties.BackupPath)\$($archiveName).rar"
-
-    # If WinRAR installed use that, otherwise use default compression.
-    if (Test-Path -Path "C:\Program Files\WinRAR\Rar.exe") {
-        & "C:\Program Files\WinRAR\Rar.exe" a "$([string]$properties.BackupPath)\$archiveName.rar" "ASAServers\ShooterGame\Saved"
-    } else {
-        Compress-Archive -Path "ASAServers\ShooterGame\Saved" -DestinationPath "$([string]$properties.BackupPath)\$archiveName.zip" -CompressionLevel Optimal
+    # Start up all maps with a short stagger period inbetween.
+    $activeMapIds = getActiveMapIds
+    for ($i = 0; $i -lt $activeMapIds.Length; $i++) {
+        Write-Host "Launching server $($i+1) of $($activeMapIds.Length). [$($activeMapIds[$i])]"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$($modIds)`" $($properties.AdditionalCMDFlags)"
+        Write-Host $commandLine
+        if (!$skip) {
+            Invoke-Expression $commandLine
+            timeout /t 60 /nobreak
+        }
     }
 }
 
 function crashDetect {
+
     # Confirm server is not running.
     if (isServerRunning) {
         Write-Host "No crash detected."
@@ -368,97 +439,79 @@ function crashDetect {
     $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
     $crashRecoveryProperties = ConvertFrom-StringData -StringData $crashRecoveryPropertiesContentEscaped
 
-    $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
+    # Check if event specified or roulette requested.
+    if ($null -eq $eventroulette) {
+        # Set active event id from recovery file.
+        Write-Host "Restoring state from ASACrashRecovery.properties file."
+        $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
+    }
 
     # Crash detected, run restart now.
-    $Script:now = $true
-    $Script:rollforcerespawndinos = 0
     restartServer
 }
 
-function setup {
-    # Setup project structure.
-    Write-Host "Setting up project structure."
-    New-Item -Path "./ASAServers" -ItemType Directory
-    New-Item -Path "./Backups" -ItemType Directory
-    New-Item -Path "./RCON" -ItemType Directory
-    New-Item -Path "./Status" -ItemType Directory
-    New-Item -Path "./SteamCMD" -ItemType Directory
+function backupServer {
 
-    # Generate random number for unique cluster id.
-    $clusterNumber = Get-Random -Minimum 100000000 -Maximum 999999999
+    # Server operation.
+    Write-Host "======= Backup Requested ======="
 
-    # Create properties file with initial values.
-    $initialPropertiesValues = "" +
-    "# Server will show up in the list with this value, followed by a hyphen and the map label. (e.g. `"My Cool Cluster - The Island`")`n" +
-    "SessionHeader=My Cool Cluster`n" +
-    "# Determines which map the server will host. Comma delimit for clusters. Duplicates won't work.`n" +
-    "ActiveMapIDs=TheIsland_WP`n" +
-    "# Put event mod id to activate an event, otherwise leave blank.`n" +
-    "ActiveEventID=`n" +
-    "# Include additional command line flags you would like here space-separated. (e.g. `"-PassiveMods=927090 -NoTransferFromFiltering -NoBattlEye`")`n" +
-    "AdditionalCMDFlags=-NoTransferFromFiltering -NoBattlEye`n" +
-    "# If using clusters populate this with a unique Id, otherwise leave blank. (e.g. `"MyCoolCluster123456789`")`n" +
-    "ClusterId=MyCoolCluster$($clusterNumber)`n" +
-    "# Change this to overwride the default backup folder. (Use UNC paths for network folders.)`n" +
-    "BackupPath=./Backups`n" +
-    "# Sets the maximum concurrent players in your server.`n" +
-    "MaxPlayers=20`n" +
-    "# Copy the admin password you've set in GameUserSettings_Queued.ini here. (This tool will not function properly without this.)`")`n" +
-    "AdminPassword=`n"
-    New-Item -Path "./ASAServer.properties" -ItemType File -Value $initialPropertiesValues
-    
-    # Download the utilities used by the script.
-    Write-Host "Downloading & unpacking utilities used by the script."
-    Invoke-WebRequest -Uri "https://github.com/gorcon/rcon-cli/releases/download/v0.10.3/rcon-0.10.3-win64.zip" -Outfile RCON.zip
-    Expand-Archive -Path "./RCON.zip" -DestinationPath "./RCON/"
-    Invoke-WebRequest -Uri "https://steamcdn-a.akamaihd.net/client/installer/steamcmd.zip" -Outfile SteamCMD.zip
-    Expand-Archive -Path "./SteamCMD.zip" -DestinationPath "./SteamCMD/"
-    
-    # Relocate rcon-cli for easier access.
-    Move-Item -Path "./RCON/rcon-0.10.3-win64/*" -Destination "./RCON"
-    
-    # Cleanup.
-    Write-Host "Cleaning up."
-    Remove-Item -Path "./RCON.zip"
-    Remove-Item -Path "./SteamCMD.zip"
-    Remove-Item -Path "./RCON/rcon-0.10.3-win64" -Recurse
-    
-    #Update steamcmd.
-    Write-Host "Updating steamcmd."
-    SteamCMD\steamcmd.exe +quit
-    
-    # Update the server before running.
-    updateServer
-
-    # Next steps.
-    New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer" -ItemType Directory
-    Write-Host "`nSetup complete, check out the ASAServer.properties for important settings before starting the server."
-    Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the `"./ASAServers/ShooterGame/Saved/Config/WindowsServer`" folder."
-    Pause
-
-    # Create queued versions of ini files for easier configuration updates.
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
-        Write-Host "Creating queues version of Game.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game_Queued.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
-        Write-Host "Creating regular and queued versions of Game.ini"
-        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" | Out-Null
-        New-Item -Name "./Game_Queued.ini" | Out-Null
+    # Confirm server has a planned shutdown.
+    if ((isServerRunning) -AND !($restart -OR $shutdown)) {
+        Write-Host -ForegroundColor Red "ERROR: Cannot perform backup while server is running."
+        return
     }
 
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
-        Write-Host "Creating queues version of GameUserSettings.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings_Queued.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
-        Write-Host "Creating regular and queued versions of GameUserSettings.ini"
-        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Out-Null
-        New-Item -Name "./GameUserSettings_Queued.ini" | Out-Null
+    # Timeout up to 2 minutes for process to close before backup.
+    $backedUp = $false
+    for ($i = 0; $i -lt 12; $i++) {# 10 Second timeout in between checks.
+        Write-Host "Waiting for process to exit before performing backup."
+        timeout /t 10 /nobreak
+            
+        if (-Not (isServerRunning)) {
+            # Archive backup of the Saved folder with YYYY-MM-DD-HHMM format.
+            $archiveName = Get-Date -Format "yyyy-MM-dd_HHmm"
+
+            # If WinRAR installed, use that, otherwise use default compression.
+            if (Test-Path -Path "C:\Program Files\WinRAR\Rar.exe") {
+                Write-Host "Archiving ASAServers\Shootergame\Saved to $([string]$properties.BackupPath)\$($archiveName).rar using WinRar."
+                if (!$skip) { & "C:\Program Files\WinRAR\Rar.exe" a "$([string]$properties.BackupPath)\$($archiveName).rar" "ASAServers\ShooterGame\Saved" }
+            } else {
+                Write-Host "Archiving ASAServers\Shootergame\Saved to $([string]$properties.BackupPath)\$($archiveName).rar using default compression."
+                if (!$skip) { Compress-Archive -Path "ASAServers\ShooterGame\Saved" -DestinationPath "$([string]$properties.BackupPath)\$($archiveName).zip" -CompressionLevel Optimal }
+            }
+
+            $backedUp = $true
+            break
+        }
     }
+
+    # If true there may be an orphaned server running requiring a process kill.
+    if (!$backedUp)
+    {
+        Write-Host -ForegroundColor Red "ERROR: Backup failed because server was still running. ArkAscendedServer processes may need to be killed manually before proceeding."
+        Write-Host -ForegroundColor Yellow "HINT: Also double check ASAServer.properties file. If invalid ActiveMapIDs are listed, they will often cause zombie servers like this."
+    }
+}
+
+function updateServer {
+
+    # Server operation.
+    Write-Host "======= Update Requested ======="
+
+    # Confirm server is not running.
+    if (isServerRunning) {
+        Write-Host -ForegroundColor Red "Cannot patch server while updating."
+        return
+    }
+
+    # Update server using steamcmd.
+    Write-Host "Requesting steamcmd to update and validate the Ark Ascended Server application."
+    if (!$skip) { SteamCMD\steamcmd.exe +force_install_dir ../ASAServers/ +login anonymous +app_update 2430930 validate +quit }
 }
 
 # Check if ArkAscendedServer.exe is running.
 function isServerRunning {
+
     $processName = "ArkAscendedServer"
     Write-Host "Checking for instance of $processName."
     $isRunning = (Get-Process | Where-Object { $_.Name -eq $processName }).Count -gt 0
@@ -473,6 +526,7 @@ function isServerRunning {
 
 # Get active mods from GameUserSettings.ini
 function getActiveModIds {
+
     # Read ini file to get ActiveMods
     $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Where-Object { $_ -match "ActiveMods=" }
     $activeModsArray = $activeModsLine -split "="
@@ -483,6 +537,7 @@ function getActiveModIds {
 
 # Get active maps from server properties.
 function getActiveMapIds {
+
     # Get active map ids from properties.
     $activeMapIds = @($properties.ActiveMapIDs.split(",") | Select-Object -Unique)
 
@@ -491,6 +546,7 @@ function getActiveMapIds {
 
 # Get which ports from the pool are being used.
 function getListeningPorts {
+
     Write-Host "Checking for listening ports."
     [string[]]$listeningPorts = @()
     $listeningPortIndex = 0
@@ -520,18 +576,75 @@ function rcon {
     Invoke-Expression $commandLine
 }
 
-# Class definition for map.
-class Map {
-    [String]$apiName
-    [String]$label
+# Call for parameter validation.
+function validateParameters {
+
+    # Return value
+    $validParameters = $true
+
+    # Primary operation flags
+    if ($setup -AND ($restart -OR $shutdown -OR $crashdetect -OR $backup -OR $update -OR $eventroulette -OR ($roulettechance -ge 0) -OR $rollforcerespawndinos -OR $now -OR $preservestate)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -setup flag can only be used by itself."
+        $validParameters = $false
+    }
+    if (($restart -AND ($shutdown -OR $crashdetect)) -OR ($shutdown -AND ($restart -OR $crashdetect)) -OR ($crashdetect -AND ($restart -OR $shutdown))) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: Only one of the following primary server operations can be used: -restart, -shutdown, or -crashdetect."
+        $validParameters = $false
+    }
+    if ($shutdown -AND ($eventroulette -OR $rollforcerespawndinos -OR $preservestate)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -shutdown operation cannot be used with -eventroulette, -rollforcerespawndinos, or -preservestate."
+        $validParameters = $false
+    }
+
+    # Special operation flags
+    if ($eventroulette.Count -gt 0 -AND !($restart -OR $shutdown -OR $crashdetect)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -eventroulette parameter must be used in conjunction with one of the following primary server operations: -restart, -shutdown, or -crashdetect."
+        $validParameters = $false
+    }
+    if ($eventroulette.Count -gt 0 -AND $preservestate) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -eventroulette parameter cannot be used in conjunction with -preservestate flag."
+        $validParameters = $false
+    }
+    if ($roulettechance -ge 0 -AND $eventroulette.Count -le 0) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The roulettechance parameter must be used in conjunction with -eventroulette."
+        $validParameters = $false
+    }
+    if ($rollforcerespawndinos -gt 0 -AND !($restart -OR $shutdown -OR $crashdetect)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -rollforcerespawndinos parameter must be used in conjunction with one of the following primary server operations: -restart, -shutdown, or -crashdetect."
+        $validParameters = $false
+    }
+
+    # Condition flags
+    if ($now -AND !($restart -OR $shutdown)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -now flag must be used in conjunction with one of the following primary server operations: -restart or -shutdown."
+        $validParameters = $false
+    }
+    if ($preservestate -AND !($restart -OR $crashdetect)) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -now flag must be used in conjunction with one of the following primary server operations: -restart or -crashdetect."
+        $validParameters = $false
+    }
+    if ($istest -AND !$setup) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The istest flag can only be used in conjuction with -setup."
+        $validParameters = $false
+    }
+
+    return $validParameters
 }
 
-# Class definition for port set.
+# Class definitions.
 class PortSet {
     [String]$instancePort
     [String]$rawPort
     [String]$queryPort
     [String]$rconPort
+}
+Class ASAEvent {
+    [String]$modId
+    [String]$eventLabel
+}
+Class ASAMap {
+    [String]$apiName
+    [string]$mapLabel
 }
 
 # Execute main logic.
