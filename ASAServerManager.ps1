@@ -338,7 +338,7 @@ function restartServer {
     if (isServerRunning) { return }
 
     # Handle -preservestate related properties.
-    if ($preservestate -AND !$crashdetect) {
+    if ($preservestate -OR $crashdetect) {
         # Load crash recovery properties file.
         $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
         $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
@@ -369,9 +369,9 @@ function restartServer {
 
     # Check if event specified or roulette requested.
     if (!$null -eq $eventroulette) {
-        $eventroulette = $eventroulette.Split(",")
+        $eventRouletteArray = $eventroulette.Split(",")
     }
-    if ($properties.ActiveEventID -eq "" -AND $eventroulette.Count -gt 0) {
+    if ($properties.ActiveEventID -eq "" -AND $eventRouletteArray.Count -gt 0) {
         if ($roulettechance -lt 0) {
             Write-Host "Setting default roulettechance of 100."
             $roulettechance = 100
@@ -379,8 +379,8 @@ function restartServer {
         $diceRoll = Get-Random -Minimum 1 -Maximum 100
         Write-Host "Rolled a $($diceRoll) against -roulettechance $($roulettechance)."
         if ($diceRoll -le $roulettechance) {
-            $diceRoll = Get-Random -Minimum 0 -Maximum ($eventroulette.Count)
-            $activeEventId = $eventroulette[$diceRoll]
+            $diceRoll = Get-Random -Minimum 0 -Maximum ($eventRouletteArray.Count)
+            $activeEventId = $eventRouletteArray[$diceRoll]
         }
     } elseif (!$properties.ActiveEventID -eq "") {
         $activeEventId = $properties.ActiveEventID
@@ -434,6 +434,7 @@ function crashDetect {
         return
     }
 
+    <#
     # Load crash recovery properties file.
     $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
     $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
@@ -445,6 +446,7 @@ function crashDetect {
         Write-Host "Restoring state from ASACrashRecovery.properties file."
         $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
     }
+    #>
 
     # Crash detected, run restart now.
     restartServer
@@ -597,15 +599,17 @@ function validateParameters {
     }
 
     # Special operation flags
-    if ($eventroulette.Count -gt 0 -AND !($restart -OR $shutdown -OR $crashdetect)) {
-        Write-Host -ForegroundColor Red "Invalid Parameters: The -eventroulette parameter must be used in conjunction with one of the following primary server operations: -restart, -shutdown, or -crashdetect."
+    if ($eventroulette.Length -gt 0 -AND !$restart) {
+        Write-Host -ForegroundColor Red "Invalid Parameters: The -eventroulette parameter can only be used in conjunction with the -restart operation."
         $validParameters = $false
     }
-    if ($eventroulette.Count -gt 0 -AND $preservestate) {
+    Write-Host "`$eventroulette contents ->$($eventroulette)<-"
+    Write-Host "`$eventroulette.Length:$($eventroulette.Length)"
+    if ($eventroulette.Length -gt 0 -AND ($preservestate -OR $crashdetect)) {
         Write-Host -ForegroundColor Red "Invalid Parameters: The -eventroulette parameter cannot be used in conjunction with -preservestate flag."
         $validParameters = $false
     }
-    if ($roulettechance -ge 0 -AND $eventroulette.Count -le 0) {
+    if ($roulettechance -ge 0 -AND $eventroulette.Length -le 0) {
         Write-Host -ForegroundColor Red "Invalid Parameters: The roulettechance parameter must be used in conjunction with -eventroulette."
         $validParameters = $false
     }
