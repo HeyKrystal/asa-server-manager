@@ -138,17 +138,17 @@ function main {
         Write-Host "Execution blocked by ASA.lock file. An instance of ASAServerManager.ps1 is already running."
         Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file in the Status folder and try again."
         exit
-    }
-    else {
+    } else {
         $null = New-Item -Name ./Status/ASA.lock -Force
         Write-Host "Starting ASAServerManager script and creating lock file."
     }
 
     # Validate parameters combinations.
+    $setupActual = ($setup -OR !($shutdown -OR $backup -OR $backup -OR $update -OR $restart -OR $crashdetect))
     if (validateParameters) {
         # Exit script if properties file doesnt exist.
-        if (!(Test-Path -Path "./ASAServer.properties") -AND !$setup) {
-            Write-Host "Unable to find ASAServer.properties; run script with `"setup`" argument."
+        if (!(Test-Path -Path "./ASAServer.properties") -AND !$setupActual) {
+            Write-Host "Unable to find ASAServer.properties; run script with `"-setup`" flag."
             timeout /t 10
         } elseif (Test-Path -Path "./ASAServer.properties") {
             # Load properties file.
@@ -168,7 +168,7 @@ function main {
         }
 
         # Perform requested operations.
-        if ($setup) { setup }
+        if ($setupActual) { setup }
         if ($shutdown -OR $restart) { shutdownServer }
         if ($backup) { backupServer }
         if ($update) { updateServer }
@@ -224,7 +224,7 @@ function setup {
     "BackupPath=./Backups`n" +
     "# Sets the maximum concurrent players in your server.`n" +
     "MaxPlayers=20`n" +
-    "# Copy the admin password you've set in GameUserSettings_Queued.ini here. (This tool will not function properly without this.)`")`n" +
+    "# Copy the admin password you've set in your GameUserSettings.ini here. (This tool will not function properly without this.)`")`n" +
     "AdminPassword=`n"
     New-Item -Path "./ASAServer.properties" -ItemType File -Value $initialPropertiesValues
     
@@ -251,30 +251,36 @@ function setup {
     # Update the server before running.
     updateServer
 
+    # Create placeholders for .ini files.
+    New-Item -Name "./Game.ini" | Out-Null
+    New-Item -Name "./GameUserSettings.ini" | Out-Null
+
     # Next steps.
     New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer" -ItemType Directory
     Write-Host "`nSetup complete, check out the ASAServer.properties for important settings before starting the server."
-    Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the `"./ASAServers/ShooterGame/Saved/Config/WindowsServer`" folder."
+    Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the same folder as this script. Replace the auto generated ones."
     if (!$istest) { Pause }
 
+    <#
     # Create queued versions of ini files for easier configuration updates.
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game.ini")) {
         Write-Host "Creating queues version of Game.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game_Queued.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game_Queued.ini")) {
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game.ini")) {
         Write-Host "Creating regular and queued versions of Game.ini"
         New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" | Out-Null
-        New-Item -Name "./Game_Queued.ini" | Out-Null
+        New-Item -Name "./Game.ini" | Out-Null
     }
 
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings.ini")) {
         Write-Host "Creating queues version of GameUserSettings.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings_Queued.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings_Queued.ini")) {
+        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings.ini"
+    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings.ini")) {
         Write-Host "Creating regular and queued versions of GameUserSettings.ini"
         New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Out-Null
-        New-Item -Name "./GameUserSettings_Queued.ini" | Out-Null
+        New-Item -Name "./GameUserSettings.ini" | Out-Null
     }
+    #>
 }
 
 function shutdownServer {
@@ -360,7 +366,7 @@ function restartServer {
     if (isServerRunning) { return }
 
     # Handle -preservestate related properties.
-    if ($preservestate -OR $crashdetect) {
+    if (($preservestate -OR $crashdetect) -AND (Test-Path -Path ".\Status\ASACrashRecovery.properties")) {
         # Load crash recovery properties file.
         $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
         $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
@@ -370,17 +376,16 @@ function restartServer {
         Write-Host "Restoring state from ASACrashRecovery.properties file."
         $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
     } else {
-        # Replace ini files with backups.
-        Copy-Item -Path "./Game_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
-        Copy-Item -Path "./GameUserSettings_Queued.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" -Force
-
-        # Store ActiveMods line from GameUserSettings.ini, store in ActiveMods.ini, then remove line entirely.
-        Write-Host "Relocating ActiveMods to ActiveMods.ini file."
-        $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" | Where-Object { $_ -match "ActiveMods=" }
-        Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" | Where-Object {$_ -notmatch "ActiveMods="} | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
-        Remove-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp"
-        $null = New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/ActiveMods.ini" -ItemType File -Value "$($activeModsLine)" -Force
+        # Replace ini files with queued files.
+        Copy-Item -Path "./Game.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
+        Copy-Item -Path "./GameUserSettings.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" -Force
     }
+
+    # Store ActiveMods line from GameUserSettings.ini, store in ActiveMods.ini, then remove line entirely.
+    Write-Host "Relocating ActiveMods to ActiveMods.ini file."
+    $activeModsLine = Get-Content -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" | Where-Object { $_ -match "ActiveMods=" }
+    Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" | Where-Object {$_ -notmatch "ActiveMods="} | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
+    $null = New-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/ActiveMods.ini" -ItemType File -Value "$($activeModsLine)" -Force
 
     # Determine if dinos will be force respawned.
     $respawnDinoArgument = ""

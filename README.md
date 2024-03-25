@@ -31,7 +31,6 @@ The primary goal in developing this script was to make an ark management tool fo
 ```-eventroulette``` : This parameter allows you to provide a comma separated list of event mod ids to activate at random on restart. To avoid loss, only use events that have been added to the core game. Technically this will work with general mods too, but its not recommended. This will not overrided events specified in the ASAServer.properties file. 
 <br>```-roulettechance``` : Paired with -eventroulette, this paramater allows you to specify the percentage chance that an event roulette will occur. Must provide a value of 0-100. Default value is 100.
 <br>```-rollforcerespawndinos``` : This flag introduces a chance that -ForceRespawnDinos will be set on server startup, thus respawning all wild dinos. The value provided specifies the percentage chance that a forced respawn will occur and must be a value of 0-100. This flag can only be triggered on operation ```-restart```.
-
 ### Conditions
 ```-now``` : This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on ```-shutdown``` or ```-restart``` operations.
 <br>```-preservestate``` : This flag can be used during restarts to keep events active that were rolled from ```-eventroulette```; The ```-crashdetect``` operation has ```-preservestate``` set to true by default.
@@ -68,10 +67,9 @@ $ ./ASAServerManager.ps1 -restart -now -preservestate
 1. Create a folder where you would like install the server.
 2. Copy the ASAServerManager.ps1 script into that folder.
 3. Right click ASAServerManager.ps1 and select ```Run with PowerShell```
-4. Type ```setup``` when prompted for a serverop.
-5. Wait for the setup process to finish and close out; following any directions it gives.
+4. Wait for the setup process to finish and close out; following any directions it gives.
 5. Edit the ```ASAServer.properties``` file with your preferred configurations. It contains default configs and examples.
-6. Edit the ```Game_Queued.ini``` and ```GameUserSetting_Queued.ini``` with preferred server configurations. This is where you will put any and all .ini configurations for your server. They will automatically be copied into the server configurations on ```-restart```.
+6. Edit the ```Game.ini``` and ```GameUserSetting.ini``` with preferred server configurations. This is where you will put any and all .ini configurations for your server. They will automatically be copied into the server configurations on ```-restart```.
 
 ### Scheduling
 I recommended scheduling these commands with Windows Task Scheduler so that they will run in the backround. Watch a quick video on Task Scheduler if you are unfamiliar. Here is a quick setup for a nightly restart that includes backups and updates.
