@@ -34,6 +34,7 @@ The primary goal in developing this script was to make an ark management tool fo
 ### Conditions
 ```-now``` : This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on ```-shutdown``` or ```-restart``` operations.
 <br>```-preservestate``` : This flag can be used during restarts to keep events active that were rolled from ```-eventroulette```; The ```-crashdetect``` operation has ```-preservestate``` set to true by default.
+<br>```-forceini``` : This flag forces the .ini files to be updated even when using the ```-preservestate``` flag or ```-crashdetect``` operation.
 <br>```-skip``` : This flag is for troubleshooting/development. When set, major server operations are simulated. Some minor functions and logging still occur. Not recommended for general use.
 <br>```-istest``` : This flag is for skipping the pause in the setup operation. Not recommended for general use.
 
@@ -58,9 +59,13 @@ The following command will shutdown any currently running servers immediately, t
 ```
 $ ./ASAServerManager.ps1 -restart -now -rollforcerespawndinos 75
 ```
-The following command will make a note of the running event, shutdown any currently running servers immediately, then start the server back up, activating the noted event:
+The following command will make a note of the running event, shutdown any currently running servers immediately, then start the server back up, activating the noted event. The .ini files will not be updated:
 ```
 $ ./ASAServerManager.ps1 -restart -now -preservestate
+```
+The following command will make a note of the running event, shutdown any currently running servers immediately, then start the server back up, activating the noted event. The .ini files will be updated:
+```
+$ ./ASAServerManager.ps1 -restart -now -preservestate -forceini
 ```
 
 ## Setup

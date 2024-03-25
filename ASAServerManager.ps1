@@ -36,7 +36,10 @@
     This flag will force the shutdown sequence to skip the 1 hour delay. Can only be used on -shutdown or -restart operations.
 
     .PARAMETER preservestate
-    This flag can be used during restarts to keep events active that were rolled from -eventroulette; The -crashdetect operation has -preservestate set to true by default.
+    This flag can be used during restarts to skip updating the .ini files and keep events active that were rolled from -eventroulette; The -crashdetect operation has -preservestate set to true by default.
+
+    .PARAMETER forceini
+    This flag forces the .ini files to be updated even when using the -preservestate flag.
 
     .PARAMETER skip
     This flag is for troubleshooting/development. When set, major server operations are simulated. Some minor functions and logging still occur. Not for general use.
@@ -86,6 +89,9 @@ param (
 
     [Parameter()]
     [switch]$preservestate = $false,
+
+    [Parameter()]
+    [switch]$forceini = $false,
 
     [Parameter()]
     [switch]$skip = $false,
@@ -260,27 +266,6 @@ function setup {
     Write-Host "`nSetup complete, check out the ASAServer.properties for important settings before starting the server."
     Write-Host "Also if you have GameUserSettings.ini and Game.ini you are planning on using, right now (before pressing enter) would be a great time to copy them into the same folder as this script. Replace the auto generated ones."
     if (!$istest) { Pause }
-
-    <#
-    # Create queued versions of ini files for easier configuration updates.
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game.ini")) {
-        Write-Host "Creating queues version of Game.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Destination "./Game.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini") -AND !(Test-Path -Path "./Game.ini")) {
-        Write-Host "Creating regular and queued versions of Game.ini"
-        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" | Out-Null
-        New-Item -Name "./Game.ini" | Out-Null
-    }
-
-    if ((Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings.ini")) {
-        Write-Host "Creating queues version of GameUserSettings.ini"
-        Copy-Item -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Destination "./GameUserSettings.ini"
-    } elseif (!(Test-Path -Path "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -AND !(Test-Path -Path "./GameUserSettings.ini")) {
-        Write-Host "Creating regular and queued versions of GameUserSettings.ini"
-        New-Item -Name "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" | Out-Null
-        New-Item -Name "./GameUserSettings.ini" | Out-Null
-    }
-    #>
 }
 
 function shutdownServer {
@@ -376,7 +361,12 @@ function restartServer {
         Write-Host "Restoring state from ASACrashRecovery.properties file."
         $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
     } else {
-        # Replace ini files with queued files.
+        $reloadini = $true
+    }
+
+    # Replace ini files with queued files.
+    $reloadini = ($forceini -OR $reloadini)
+    if ($reloadini) {
         Copy-Item -Path "./Game.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/Game.ini" -Force
         Copy-Item -Path "./GameUserSettings.ini" -Destination "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" -Force
     }
