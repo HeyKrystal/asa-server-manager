@@ -39,7 +39,7 @@
     This flag can be used during restarts to skip updating the .ini files and keep events active that were rolled from -eventroulette; The -crashdetect operation has -preservestate set to true by default.
 
     .PARAMETER forceini
-    This flag forces the .ini files to be updated even when using the -preservestate flag.
+    This flag forces the .ini files to be updated even when using the -preservestate flag or -crashdetect operation.
 
     .PARAMETER skip
     This flag is for troubleshooting/development. When set, major server operations are simulated. Some minor functions and logging still occur. Not for general use.
@@ -116,6 +116,7 @@ $portPool = @(
 # Used for dynamically labeling servers.
 $maps = @{
     TheIsland_WP=[ASAMap]@{ apiName="TheIsland_WP"; mapLabel="The Island" }
+    ScorchedEarth_WP=[ASAMap]@{ apiName="ScorchedEarth_WP"; mapLabel="Scorched Earth" }
     Svartalfheim_WP=[ASAMap]@{ apiName="Svartalfheim_WP"; mapLabel="Svartalfheim(Test)" }
     Nyrandil=[ASAMap]@{ apiName="Nyrandil"; mapLabel="Nyrandil(Test)" }
 }
