@@ -457,7 +457,7 @@ function restartServer {
         if ($allMods.Length -gt 0) { $modsParameter = "-mods=$($allMods -join ",")" } else { $modsParameter = "" }
 
         # Launch server command.
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort) $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$modsParameter`" $($properties.AdditionalCMDFlags)"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort)?EventColorsChanceOverride=0.75 $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$modsParameter`" $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         if (!$skip) {
             Invoke-Expression $commandLine
@@ -512,7 +512,7 @@ function updateServer {
 
     # Confirm server is not running.
     if (isServerRunning) {
-        Write-Host -ForegroundColor Red "Cannot patch server while updating."
+        Write-Host -ForegroundColor Red "Cannot perform update while server is running."
         return
     }
 
