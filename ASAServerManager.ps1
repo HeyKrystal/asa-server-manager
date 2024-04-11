@@ -411,11 +411,13 @@ function restartServer {
     } elseif (!$properties.ActiveEventID -eq "") {
         $activeEventId = $properties.ActiveEventID
     }
-    $eventIdentified = $false;
+    $eventIdentified = $false
+    $sessionNameEventSuffix = ""
     for ($i = 0; $i -lt $events.Length; $i++) {
         if ($activeEventId -eq ($events[$i].modId)) {
             Write-Host "Including $($events[$i].eventLabel) event."
             $eventIdentified = $true;
+            $sessionNameEventSuffix = " ($($events[$i].eventLabel))"
         }
     }
     if (!$activeEventId -eq "" -AND !$eventIdentified) {
@@ -457,7 +459,7 @@ function restartServer {
         if ($allMods.Length -gt 0) { $modsParameter = "-mods=$($allMods -join ",")" } else { $modsParameter = "" }
 
         # Launch server command.
-        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort)?EventColorsChanceOverride=0.75 $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$modsParameter`" $($properties.AdditionalCMDFlags)"
+        $commandLine = "cmd /c start '' /b ASAServers\ShooterGame\Binaries\Win64\ArkAscendedServer.exe $($maps[$activeMapIds[$i]].apiName)?SessionName='\`"$($properties.SessionHeader) - $($maps[$activeMapIds[$i]].mapLabel)$($sessionNameEventSuffix)\`"'?AltSaveDirectoryName=KC$($maps[$activeMapIds[$i]].apiName)Save?Port=$($portPool[$i].instancePort)?RCONPort=$($portPool[$i].rconPort)?EventColorsChanceOverride=0.75 $($respawnDinoArgument) -clusterID=$($properties.ClusterId) -WinLiveMaxPlayers=$($properties.MaxPlayers) `"$modsParameter`" $($properties.AdditionalCMDFlags)"
         Write-Host $commandLine
         if (!$skip) {
             Invoke-Expression $commandLine
