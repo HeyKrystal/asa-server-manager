@@ -129,8 +129,8 @@ $events = @(
     [ASAEvent]@{ modId="927083"; eventLabel="Turkey Trial" }
 	[ASAEvent]@{ modId="927090"; eventLabel="Winter Wonderland" }
 	[ASAEvent]@{ modId="927084"; eventLabel="Love Ascended" }
-	[ASAEvent]@{ modId="927091 "; eventLabel="Summer Bash" }
-	[ASAEvent]@{ modId="877752 "; eventLabel="Fear Ascended" }
+	[ASAEvent]@{ modId="927091"; eventLabel="Summer Bash" }
+	[ASAEvent]@{ modId="877752"; eventLabel="Fear Ascended" }
 )
 
 function main {
