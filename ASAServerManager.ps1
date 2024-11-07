@@ -116,9 +116,12 @@ $portPool = @(
 # Used for dynamically labeling servers.
 $maps = @{
     TheIsland_WP=[ASAMap]@{ apiName="TheIsland_WP"; mapLabel="The Island" }
+    TheCenter_WP=[ASAMap]@{ apiName="TheCenter_WP"; mapLabel="The Center" }
     ScorchedEarth_WP=[ASAMap]@{ apiName="ScorchedEarth_WP"; mapLabel="Scorched Earth" }
-    Svartalfheim_WP=[ASAMap]@{ apiName="Svartalfheim_WP"; mapLabel="Svartalfheim(Test)" }
-    Nyrandil=[ASAMap]@{ apiName="Nyrandil"; mapLabel="Nyrandil(Test)" }
+    Aberration_WP=[ASAMap]@{ apiName="Aberration_WP"; mapLabel="Aberration" }
+    Svartalfheim_WP=[ASAMap]@{ apiName="Svartalfheim_WP"; mapLabel="Svartalfheim" }
+    Nyrandil=[ASAMap]@{ apiName="Nyrandil"; mapLabel="Nyrandil" }
+    BobsMissions_WP=[ASAMap]@{ apiName="BobsMissions_WP"; mapLabel="Club Ark" }
 }
 
 # These are the mod ids for core events.
@@ -126,6 +129,8 @@ $events = @(
     [ASAEvent]@{ modId="927083"; eventLabel="Turkey Trial" }
 	[ASAEvent]@{ modId="927090"; eventLabel="Winter Wonderland" }
 	[ASAEvent]@{ modId="927084"; eventLabel="Love Ascended" }
+	[ASAEvent]@{ modId="927091 "; eventLabel="Summer Bash" }
+	[ASAEvent]@{ modId="877752 "; eventLabel="Fear Ascended" }
 )
 
 function main {
