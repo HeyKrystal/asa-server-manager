@@ -151,7 +151,7 @@ function main {
         Write-Host "If you believe you have received this message in error, you can manually delete the ASA.lock file in the Status folder and try again."
         exit
     } else {
-        $null = New-Item -Name ./Status/ASA.lock -Force
+        $null = New-Item -Name "./Status/ASA.lock" -Force
         Write-Host "Starting ASAServerManager script and creating lock file."
     }
 
@@ -344,8 +344,13 @@ function shutdownServer {
         if (!$successfullyShutdown) {
             Write-Host -ForegroundColor Red "ERROR: Server failed to shutdown. ArkAscendedServer processes may need to be killed manually before proceeding."
             Write-Host -ForegroundColor Yellow "HINT: Also double check ASAServer.properties file. If invalid ActiveMapIDs are listed, they will often cause zombie servers like this."
+            return
         }
     }
+    
+    # Mark server as not running in Status folder.
+    Write-Host "Remove running status for server."
+    Remove-Item -Path "./Status/ASA.running"
 }
 
 function restartServer {
@@ -362,7 +367,7 @@ function restartServer {
         $crashRecoveryPropertiesContent = Get-Content ".\Status\ASACrashRecovery.properties" -raw
         $crashRecoveryPropertiesContentEscaped = $crashRecoveryPropertiesContent -replace '\\', '\\'
         $crashRecoveryProperties = ConvertFrom-StringData -StringData $crashRecoveryPropertiesContentEscaped
-    
+
         # Set active event id from recovery file.
         Write-Host "Restoring state from ASACrashRecovery.properties file."
         $properties.ActiveEventID = $crashRecoveryProperties.ActiveEventID
@@ -459,7 +464,7 @@ function restartServer {
         # Build mod parameter.
         $allMods = New-Object Collections.Generic.List[String]
         if (!$activeEventId -eq "") { $allMods.add($activeEventId) }
-        if (!$activeModIds -eq "") { $allMods.add($activeModIds) }
+        if (!("$($maps[$activeMapIds[$i]].apiName)" -eq "BobsMissions_WP") -AND !$activeModIds -eq "") { $allMods.add($activeModIds) }
         if (!$mapSpecificModsIds -eq "") { $allMods.add($mapSpecificModsIds) }
         if ($allMods.Length -gt 0) { $modsParameter = "-mods=$($allMods -join ",")" } else { $modsParameter = "" }
 
@@ -471,14 +476,29 @@ function restartServer {
             timeout /t 60 /nobreak
         }
     }
+
+    # Mark server as running in Status folder.
+    Write-Host "Marking server as running in Status folder."
+    $null = New-Item -Name "./Status/ASA.running" -Force
 }
 
 function crashDetect {
+
+    # Server operation.
+    Write-Host -ForegroundColor Green "======= Crash Detection ======="
 
     # Confirm server is not running.
     if (isServerRunning) {
         Write-Host "No crash detected."
         return
+    }
+
+    # Confirm server is supposed to be running.
+    if (!(Test-Path -Path "./Status/ASA.running")) {
+        Write-Host "No crash detected. Server was not running."
+        return
+    } else {
+        Write-Host "Crash detected. Server was running."
     }
 
     # Crash detected, run restart now.
