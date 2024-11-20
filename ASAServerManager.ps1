@@ -173,6 +173,7 @@ function main {
             Write-Host "SessionHeader: $([string]$properties.SessionHeader)"
             Write-Host "ActiveMapIDs: $([string]$properties.ActiveMapIDs)"
             Write-Host "MapSpecificMods: $([string]$properties.MapSpecificMods)"
+            Write-Host "MapSpecificGameUserSettings: $([string]$properties.MapSpecificGameUserSettings)"
             Write-Host "ActiveEventID: $([string]$properties.ActiveEventID)"
             Write-Host "AdditionalCMDFlags: $([string]$properties.AdditionalCMDFlags)"
             Write-Host "BackupPath: $([string]$properties.BackupPath)"
@@ -224,8 +225,10 @@ function setup {
     "SessionHeader=My Cool Cluster`n" +
     "# Determines which map the server will host. Comma delimit for clusters. Duplicates won't work.`n" +
     "ActiveMapIDs=TheIsland_WP`n" +
-    "# Specify map-specific mods. Useful for preventing a premium mod from paywalling an entire cluster. Or keeping map instances unique. Separate map entries with single spaces. (e.g. `"Svartalfheim_WP:962796 TheIsland_WP:123456,098765`")`n" +
+    "# Specify map-specific mods. Useful for preventing a premium mod from paywalling an entire cluster, or only loading map mods on their own map. Separate map entries with single spaces. (e.g. `"TheIsland_WP:123456,098765 Svartalfheim_WP:962796`")`n" +
     "MapSpecificMods=`n" +
+    "# Specify map-specific GameUserSettings entries. Useful for preventing preventing uploads, changing max dinos, etc. on specific servers but not others. (e.g. `"TheIsland_WP:MaxTamedDinos=2500 Svartalfheim_WP:PreventDownloadItems=True,PreventDownloadDinos=True`")`n" +
+    "MapSpecificGameUserSettings=`n" +
     "# Put event mod id to activate an event, otherwise leave blank. This property will always override -eventroulette.`n" +
     "ActiveEventID=`n" +
     "# Include additional command line flags you would like here space-separated. (e.g. `"-PassiveMods=927090 -NoTransferFromFiltering -NoBattlEye`")`n" +
@@ -440,6 +443,9 @@ function restartServer {
     # Collect map specific mods if applicable.
     $mapSpecificMods = $properties.MapSpecificMods.split(" ")
 
+    # Collect map specific GameUserSettings if applicable.
+    $MapSpecificGameUserSettings = $properties.MapSpecificGameUserSettings.split(" ")
+
     # Set crash recovery properties.
     Write-Host "Storing state in ASACrashRecovery.properties file."
     $null = New-Item -Path "./Status/ASACrashRecovery.properties" -ItemType File -Value "# Crash Recovery Properties`nActiveEventID=$($activeEventId)" -Force
@@ -454,11 +460,31 @@ function restartServer {
         for ($j = 0; $j -lt $mapSpecificMods.Length; $j++) {
             if ($mapSpecificMods[$j].StartsWith("$($activeMapIds[$i])")) {
                 $mapSpecificModsIds = $mapSpecificMods[$j].split(":")[1]
-                Write-Host "Including map specific mods $($mapSpecificMods[$j])"
+                Write-Host "Including map specific mods $($mapSpecificModsIds)"
                 break
             } else {
                 $mapSpecificModsIds = ""
             }
+        }
+
+        # Identify map specific GameUserSettings.
+        for ($j = 0; $j -lt $mapSpecificGameUserSettings.Length; $j++) {
+            if ($mapSpecificGameUserSettings[$j].StartsWith("$($activeMapIds[$i])")) {
+                $mapSpecificGameUserSettingsEntries = $mapSpecificGameUserSettings[$j].split(":")[1]
+                $mapSpecificGameUserSettingsOverrides = $mapSpecificGameUserSettingsEntries.split(",")
+                Write-Host "Including GameUserSettings overrides:"
+                break
+            } else {
+                $mapSpecificGameUserSettingsEntries = @()
+            }
+        }
+
+        # Override map specific GameUserSettings.
+        for ($j = 0; $j -lt $mapSpecificGameUserSettingsOverrides.Length; $j++) {
+            Write-Host "+ $($mapSpecificGameUserSettingsOverrides[$j])"
+            $entryKey = $mapSpecificGameUserSettingsOverrides[$j].split("=")[0]
+            Write-Host "Searching for $($entryKey) --- ^$($entryKey)=[a-zA-Z-0-9\s\p{P}]*"
+            $(Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -replace "^$($entryKey)=[a-zA-Z-0-9\s\p{P}]*", "$($mapSpecificGameUserSettingsOverrides[$j])" | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini"
         }
 
         # Build mod parameter.
@@ -475,6 +501,9 @@ function restartServer {
             Invoke-Expression $commandLine
             timeout /t 60 /nobreak
         }
+
+        # Restore base GameUserSettings from temp.
+        Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini.temp" | Where-Object {$_ -notmatch "ActiveMods="} | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini" -Force
     }
 
     # Mark server as running in Status folder.
