@@ -473,18 +473,16 @@ function restartServer {
                 $mapSpecificGameUserSettingsEntries = $mapSpecificGameUserSettings[$j].split(":")[1]
                 $mapSpecificGameUserSettingsOverrides = $mapSpecificGameUserSettingsEntries.split(",")
                 Write-Host "Including GameUserSettings overrides:"
-                break
-            } else {
-                $mapSpecificGameUserSettingsEntries = @()
-            }
-        }
+                
+                # Override map specific GameUserSettings.
+                for ($j = 0; $j -lt $mapSpecificGameUserSettingsOverrides.Length; $j++) {
+                    Write-Host "+ $($mapSpecificGameUserSettingsOverrides[$j])"
+                    $entryKey = $mapSpecificGameUserSettingsOverrides[$j].split("=")[0]
+                    $(Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -replace "^$($entryKey)=[a-zA-Z-0-9\s\p{P}]*", "$($mapSpecificGameUserSettingsOverrides[$j])" | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini"
+                }
 
-        # Override map specific GameUserSettings.
-        for ($j = 0; $j -lt $mapSpecificGameUserSettingsOverrides.Length; $j++) {
-            Write-Host "+ $($mapSpecificGameUserSettingsOverrides[$j])"
-            $entryKey = $mapSpecificGameUserSettingsOverrides[$j].split("=")[0]
-            Write-Host "Searching for $($entryKey) --- ^$($entryKey)=[a-zA-Z-0-9\s\p{P}]*"
-            $(Get-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini") -replace "^$($entryKey)=[a-zA-Z-0-9\s\p{P}]*", "$($mapSpecificGameUserSettingsOverrides[$j])" | Set-Content "./ASAServers/ShooterGame/Saved/Config/WindowsServer/GameUserSettings.ini"
+                break
+            }
         }
 
         # Build mod parameter.
